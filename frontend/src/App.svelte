@@ -200,12 +200,16 @@
     {#key page.lane}
       <Lane lane={page.lane} tab={page.tab} at={page.at} user={who?.user ?? null} {role} />
     {/key}
-  {:else if page.name === 'why' && page.target}
+  {:else if page.name === 'why' && page.target?.includes(':')}
+    <!-- A function, or some lines: all that is known of it. -->
     {#key `${page.target} ${page.lane}`}
       <Why target={page.target} lane={page.lane} />
     {/key}
   {:else if page.name === 'why'}
-    <Code />
+    <!-- The files, and one of them read with its reasons. -->
+    {#key `${page.target ?? ''} ${page.lane ?? ''}`}
+      <Code file={page.target ?? null} lane={page.lane ?? null} />
+    {/key}
   {:else if page.name === 'log'}
     <Log />
   {:else if page.name === 'notes'}

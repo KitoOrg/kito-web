@@ -1,5 +1,5 @@
 name = "web"
-version = "0.9.0"
+version = "0.10.0"
 description = "Kito in a browser: lanes and their review, why code is the way it is, the log, notes"
 api = 1
 # It reads the repository; writes comments, verdicts and notes, opens and

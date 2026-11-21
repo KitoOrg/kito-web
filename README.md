@@ -8,7 +8,7 @@ Kito: it asks the repository's daemon what `kito` asks, through the
 daemon's API (version 1, `docs/api.md` in Kito), within the permissions
 the repository gives it. Nothing of Kito is linked into it.
 
-## What it does (0.9)
+## What it does (0.10)
 
 - **The lanes** of a repository, as a list: where each stands, whose it
   is, what it declared, which other lanes are on the same code. The
@@ -44,6 +44,11 @@ the repository gives it. Nothing of Kito is linked into it.
 - **Conflicts**: what the lane and its target both did, side by side;
   keep one, or write the text. The next integration applies it.
 - **Opening and closing** a lane: for whom, why, and what it will change.
+- **The code, with its reasons**: the files on one side, a file in the
+  middle with a stripe beside each line for the reason it was last
+  written for, and beside it what that reason was: point at a line to
+  read why it is there, at a reason to see the lines it wrote. As the
+  main lane has it, or as a lane does.
 - **Why**: for a function, a file or what a lane changed, the reasons it
   is the way it is, which of its lines each reason wrote, who uses it,
   which lanes are on it now, and the notes left on it. Earlier work is
