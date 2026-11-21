@@ -56,7 +56,8 @@ kito lane close 1 >/dev/null
 kito note src/shop.ts:total "Called by the nightly billing job, outside this repository: do not rename." >/dev/null
 
 # Alice's agent puts the prices in cents; somebody asked for a change.
-kito lane open alice --intent "prices in cents" --scope ./ >/dev/null
+# Her lane says what her agent runs in (Kito 0.25): the others say theirs, and frank's nothing.
+kito lane open alice --intent "prices in cents" --scope ./ --assistant claude-code --model claude-opus-5 >/dev/null
 WORK="$APP/.kito/lanes/2/work"
 sed -i.bak 's/sum += price;/sum += Math.floor(price * 100);/' "$WORK/src/shop.ts" && rm "$WORK/src/shop.ts.bak"
 printf '\nPrices are kept in cents.\n' >> "$WORK/README.md"
@@ -65,7 +66,7 @@ kito lane request-changes 2 "See the comment on line 4." >/dev/null
 
 # Meanwhile the line alice's lane changes went in another way: her lane
 # will not merge with it, and has a conflict to decide.
-kito lane open gus --intent "prices rounded to whole units" --scope src/shop.ts:total >/dev/null
+kito lane open gus --intent "prices rounded to whole units" --scope src/shop.ts:total --assistant codex >/dev/null
 WORK="$APP/.kito/lanes/3/work"
 sed -i.bak 's/sum += price;/sum += Math.round(price);/' "$WORK/src/shop.ts" && rm "$WORK/src/shop.ts.bak"
 kito integrate 3 >/dev/null
@@ -147,7 +148,7 @@ done
 bob() {
   curl -s -o /dev/null -H "authorization: Bearer $BOB" -H 'content-type: application/json' -H 'x-kito: 1'     -d "{\"method\":\"$1\",\"params\":$2}" "http://$HTTP/-/api/shop" || true
 }
-bob open_lane '{"agent":"dana","intent":"a receipt that lists every price","scope":["src/receipt.ts","src/shop.ts:total"]}'
+bob open_lane '{"agent":"dana","intent":"a receipt that lists every price","scope":["src/receipt.ts","src/shop.ts:total"],"assistant":{"name":"codex-mcp-client","version":"0.171.0","model":"gpt-5-codex"}}'
 cat > "$APP/.kito/lanes/4/work/src/receipt.ts" <<'TS'
 import { total } from "./shop";
 
@@ -155,7 +156,7 @@ export function receipt(prices: number[]): string {
   return [...prices.map((price) => price.toFixed(2)), `total ${total(prices).toFixed(2)}`].join("\n");
 }
 TS
-bob open_lane '{"agent":"erin","intent":"a discount never takes more than the price","scope":["src/shop.ts:discount"]}'
+bob open_lane '{"agent":"erin","intent":"a discount never takes more than the price","scope":["src/shop.ts:discount"],"assistant":{"name":"zcode"}}'
 WORK="$APP/.kito/lanes/5/work"
 sed -i.bak 's|return amount - (amount \* percent) / 100;|return Math.max(0, amount - (amount * percent) / 100);|' "$WORK/src/shop.ts" && rm "$WORK/src/shop.ts.bak"
 kito --repo "$APP" sync >/dev/null

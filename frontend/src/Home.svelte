@@ -4,6 +4,8 @@
   // work. One person watches many agents: this is where they see what is
   // stopped until they act.
   import { ago } from './api.js';
+  import { assistantOf } from './assistants.js';
+  import Assistant from './Assistant.svelte';
 
   let { seen, who } = $props();
 
@@ -76,9 +78,18 @@
         {/if}
         {#each seen.atWork as one (one.href)}
           <a class="worker" href={one.href}>
-            <span class="agent" aria-hidden="true">{one.agent.slice(0, 2)}</span>
+            {#if one.assistant?.name}
+              <Assistant assistant={one.assistant} big />
+            {:else}
+              <span class="agent" aria-hidden="true">{one.agent.slice(0, 2)}</span>
+            {/if}
             <span>
               <b>{one.agent}</b>
+              {#if one.assistant?.name}
+                <span class="with">
+                  {assistantOf(one.assistant).label}{#if one.assistant.model}&nbsp;· {one.assistant.model}{/if}
+                </span>
+              {/if}
               <span class="faint">{one.where} · {one.last > 0 ? ago(one.last) : one.state.replaceAll('_', ' ')}</span>
             </span>
           </a>
@@ -218,6 +229,11 @@
   .worker .faint {
     display: block;
     font-size: 12px;
+  }
+  .with {
+    margin-left: 4px;
+    font-size: 12px;
+    color: var(--soft);
   }
   .agent {
     display: grid;

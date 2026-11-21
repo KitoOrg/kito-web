@@ -8,12 +8,19 @@ Kito: it asks the repository's daemon what `kito` asks, through the
 daemon's API (version 1, `docs/api.md` in Kito), within the permissions
 the repository gives it. Nothing of Kito is linked into it.
 
-## What it does (0.6)
+## What it does (0.7)
 
 - **The lanes** of a repository, as a list: where each stands, whose it
   is, what it declared, which other lanes are on the same code. The
   list narrows to those that wait for a review, were asked to change,
   have conflicts to decide, are yours, or are closed.
+- **Which assistant** the agent of a lane runs in, and on what model
+  when it is known: a mark of two letters on the lane (`CC` Claude Code,
+  `Cx` Codex, `Zc` ZCode; any other by its own first letters), with the
+  name, the version and the model beside it or on hover. It is what Kito
+  0.25 keeps of what the assistant said of itself; with an older Kito,
+  or a lane nobody said anything of, nothing is shown. The marks are
+  letters, not the vendors' logos.
 - **A lane**: what it is for, what it changes (files, functions and
   lines), what was said about it.
 - **Comments**: on a line of the diff, or on the lane as a whole;

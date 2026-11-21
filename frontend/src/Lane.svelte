@@ -2,6 +2,7 @@
   // A lane: what it is for, what it changes, what was said, where its
   // review stands.
   import { ask, watch } from './api.js';
+  import Assistant from './Assistant.svelte';
   import Conflicts from './Conflicts.svelte';
   import FileDiff from './FileDiff.svelte';
   import Integrate from './Integrate.svelte';
@@ -116,6 +117,7 @@
       <p class="soft meta">
         <span class="mono">{info.name ?? info.id}</span>
         · {info.agent}{#if info.owner && info.owner !== info.agent}, for {info.owner}{/if}
+        {#if info.assistant?.name}· <Assistant assistant={info.assistant} words />{/if}
         · onto {diff.onto}, from {diff.base}
       </p>
     </div>

@@ -63,7 +63,7 @@ export async function survey(repos, user, team) {
       if (need) needs.push({ ...need, title: lane.task ?? lane.intent ?? lane.id, where: where(lane.id), href: link(lane.id) });
     }
     for (const lane of repo.board) {
-      atWork.push({ agent: lane.agent, where: where(lane.id), href: link(lane.id), state: lane.state, last: lane.last_change_ms ?? 0 });
+      atWork.push({ agent: lane.agent, assistant: lane.assistant ?? null, where: where(lane.id), href: link(lane.id), state: lane.state, last: lane.last_change_ms ?? 0 });
       // Two lanes on the same code are said once, whichever of them says it.
       for (const other of sameCode(lane.overlaps)) {
         const pair = [lane.id, other].sort();

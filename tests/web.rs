@@ -481,7 +481,7 @@ fn the_client_reads_and_writes_what_the_plugin_was_given() {
     }
     assert!(served
         .ok(&["status"])
-        .contains("Plugin ............ web 0.6.0 (read, write, integrate)"));
+        .contains("Plugin ............ web 0.7.0 (read, write, integrate)"));
 }
 
 #[test]

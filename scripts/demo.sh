@@ -52,7 +52,7 @@ kito lane close 1 >/dev/null
 kito note src/shop.ts:total "Called by the nightly billing job, outside this repository: do not rename." >/dev/null
 
 # Alice's agent puts the prices in cents, and renames a function on the way.
-kito lane open alice --intent "prices in cents" --scope ./ >/dev/null
+kito lane open alice --intent "prices in cents" --scope ./ --assistant claude-code --model claude-opus-5 >/dev/null
 WORK="$APP/.kito/lanes/2/work"
 sed -i.bak 's/sum += price;/sum += Math.floor(price * 100);/' "$WORK/src/shop.ts" && rm "$WORK/src/shop.ts.bak"
 kito rename src/shop.ts:discount rebate --lane 2 >/dev/null
@@ -62,7 +62,7 @@ kito lane comment 2 "Say in the README why cents." >/dev/null
 kito lane request-changes 2 "See the comment on line 4." >/dev/null
 
 # Bob's agent writes a receipt, and has asked to be integrated.
-kito lane open bob --intent "a receipt that lists every price" --scope src/cart.ts >/dev/null
+kito lane open bob --intent "a receipt that lists every price" --scope src/cart.ts --assistant codex --model gpt-5-codex >/dev/null
 WORK2="$APP/.kito/lanes/3/work"
 cat >> "$WORK2/src/cart.ts" <<'TS'
 

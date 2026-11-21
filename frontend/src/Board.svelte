@@ -3,6 +3,7 @@
   // stands, whose it is, what it is on.
   import { ago, ask, focus, laneLink, watch } from './api.js';
   import { lacking, sameCode, standing } from './standing.js';
+  import Assistant from './Assistant.svelte';
   import State from './State.svelte';
 
   // `user`: who is signed in, behind a server. `role`: what they may do
@@ -177,7 +178,9 @@
             <span class="title">{lane.task ?? lane.intent ?? 'no intent said'}</span>
             <span class="meta">
               <span class="mono">{lane.name ?? lane.id}</span>
-              · {lane.agent}{#if lane.owner && lane.owner !== lane.agent}&nbsp;for {lane.owner}{/if}
+              · <Assistant assistant={lane.assistant} />
+              {lane.agent}{#if lane.owner && lane.owner !== lane.agent}&nbsp;for {lane.owner}{/if}
+              {#if lane.assistant?.model}· <span class="mono">{lane.assistant.model}</span>{/if}
               {#if lane.state !== 'closed'}· {count(lane.files.length, 'file', 'files')}{/if}
               {#if lane.last > 0}· changed {ago(lane.last)}{/if}
               {#if lane.target}· lands on {lane.target}{/if}
