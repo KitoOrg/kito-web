@@ -8,7 +8,7 @@ Kito: it asks the repository's daemon what `kito` asks, through the
 daemon's API (version 1, `docs/api.md` in Kito), within the permissions
 the repository gives it. Nothing of Kito is linked into it.
 
-## What it does (0.7)
+## What it does (0.8)
 
 - **The lanes** of a repository, as a list: where each stands, whose it
   is, what it declared, which other lanes are on the same code. The
@@ -21,8 +21,17 @@ the repository gives it. Nothing of Kito is linked into it.
   0.25 keeps of what the assistant said of itself; with an older Kito,
   or a lane nobody said anything of, nothing is shown. The marks are
   letters, not the vendors' logos.
-- **A lane**: what it is for, what it changes (files, functions and
-  lines), what was said about it.
+- **A lane**, read the way a change is reviewed, in four parts:
+  the **conversation** (the lane opened, the comments and their
+  answers, the verdicts, in the order they came, then a box to approve,
+  ask for changes or comment); the **changes** (files, functions and
+  lines, with what was said on them); the **checks** (whether it merges,
+  whether it stayed in what it declared, where its review stands, what
+  the repository runs before it goes in); and **why** (for each
+  function it touched: the reasons before this one, who else is on it
+  now, the notes left on it). Beside them: integrating, the review, what
+  it declared, the lanes on the same code, and its agent. A lane that is
+  closed says so, and where to find what it brought in.
 - **Comments**: on a line of the diff, or on the lane as a whole;
   answers; resolving. The agent working in the lane is told before its
   next edit, as with `kito lane comment`.

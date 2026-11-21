@@ -90,13 +90,16 @@
   });
   let openLanes = $derived(seen?.repos.find((one) => one.name === (repo ?? about?.repository))?.lanes.length ?? null);
 
-  // `#/lane/3`, `#/why/src%2Fshop.ts%3Atotal?lane=3`, `#/log`, `#/notes`,
-  // `#/admin`; anything else is the lanes.
+  // `#/lane/3` (and `?tab=changes&at=src/shop.ts` for a part of it),
+  // `#/why/src%2Fshop.ts%3Atotal?lane=3`, `#/log`, `#/notes`, `#/admin`;
+  // anything else is the lanes.
   let page = $derived.by(() => {
     const [path, query = ''] = route.replace(/^#\/?/, '').split('?');
     const [name, ...rest] = path.split('/');
     const asked = new URLSearchParams(query);
-    if (name === 'lane' && rest.length > 0) return { name: 'lane', lane: decodeURIComponent(rest.join('/')) };
+    if (name === 'lane' && rest.length > 0) {
+      return { name: 'lane', lane: decodeURIComponent(rest.join('/')), tab: asked.get('tab') ?? 'conversation', at: asked.get('at') };
+    }
     if (name === 'why' && rest.length > 0) {
       return { name: 'why', target: decodeURIComponent(rest.join('/')), lane: asked.get('lane') };
     }
@@ -194,7 +197,7 @@
     </div>
   {:else if page.name === 'lane'}
     {#key page.lane}
-      <Lane lane={page.lane} />
+      <Lane lane={page.lane} tab={page.tab} at={page.at} user={who?.user ?? null} {role} />
     {/key}
   {:else if page.name === 'why' && page.target}
     {#key `${page.target} ${page.lane}`}
