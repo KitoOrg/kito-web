@@ -59,6 +59,31 @@ export function watch(told) {
   };
 }
 
+/** The text of a file as a lane has it (default: the main lane); null: no such file. */
+export async function fileText(path, lane = null) {
+  const params = { paths: [path] };
+  if (lane) params.lane = lane;
+  const listed = await ask('lane_files', params);
+  const blob = listed.files?.[0]?.blob;
+  if (!blob) return null;
+  const answer = await ask('get_blobs', { blobs: [blob] });
+  const encoded = answer.blobs?.[blob];
+  if (encoded === undefined) return null;
+  const bytes = Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+/** The address of the page that says why a function, a file or lines are the way they are. */
+export function whyLink(target, lane = null) {
+  const query = lane ? `?lane=${encodeURIComponent(lane)}` : '';
+  return `#/why/${encodeURIComponent(target)}${query}`;
+}
+
+/** The address of a lane's page: `lane/3` or the name of a permanent one. */
+export function laneLink(lane) {
+  return `#/lane/${lane.replace(/^lane\//, '')}`;
+}
+
 /** Puts the cursor in a field as soon as it is on the page (`use:focus`). */
 export function focus(node) {
   node.focus();

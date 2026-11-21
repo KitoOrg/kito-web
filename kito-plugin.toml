@@ -1,8 +1,8 @@
 name = "web"
-version = "0.1.0"
-description = "Kito in a browser: the board, a lane's diff, its comments and its review"
+version = "0.2.0"
+description = "Kito in a browser: lanes and their review, why code is the way it is, the log, notes"
 api = 1
-# It reads the repository, and writes comments and verdicts for whoever
+# It reads the repository, and writes comments, verdicts and notes for whoever
 # opened it. It does not integrate: that stays `kito integrate`.
 permissions = ["read", "write"]
 

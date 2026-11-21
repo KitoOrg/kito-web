@@ -47,9 +47,19 @@ const READS: &[&str] = &[
     "conflicts",
     "log",
     "why_graph",
+    "reasons",
     "notes",
+    // The text of a file: its content is asked by the ID the list gives.
+    "lane_files",
+    "get_blobs",
 ];
-const WRITES: &[&str] = &["comment", "resolve_comment", "verdict"];
+const WRITES: &[&str] = &[
+    "comment",
+    "resolve_comment",
+    "verdict",
+    "add_note",
+    "remove_note",
+];
 
 #[derive(Clone)]
 struct App {

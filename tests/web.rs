@@ -399,6 +399,56 @@ fn the_client_reads_and_writes_what_the_plugin_was_given() {
         .json();
     assert_eq!(since["events"][0]["kind"], "commented", "{since}");
 
+    // Why code is the way it is, its text, and work found by its words.
+    let why = served
+        .call("why_graph", json!({ "target": "src/shop.ts", "lane": "1" }))
+        .json();
+    assert_eq!(why["target"]["kind"], "file", "{why}");
+    assert_eq!(why["reasons"][0]["why"], "a cheaper price", "{why}");
+    let listed = served
+        .call(
+            "lane_files",
+            json!({ "lane": "1", "paths": ["src/shop.ts"] }),
+        )
+        .json();
+    let blob = listed["files"][0]["blob"].as_str().unwrap().to_owned();
+    let content = served.call("get_blobs", json!({ "blobs": [blob] })).json();
+    // The lane's line about the price, in base64.
+    assert_eq!(
+        content["blobs"][&blob],
+        "ZXhwb3J0IGNvbnN0IHByaWNlID0gMC41Owo="
+    );
+    let found = served.call("reasons", json!({ "about": "cheaper" })).json();
+    assert_eq!(found[0]["lane"], "lane/1", "{found}");
+    let log = served.call("log", json!({ "limit": 5 })).json();
+    assert!(log.as_array().is_some_and(|log| !log.is_empty()), "{log}");
+
+    // A note, left and removed.
+    let note = served
+        .call(
+            "add_note",
+            json!({ "on": "src/shop.ts", "text": "Read by the till." }),
+        )
+        .json();
+    assert_eq!(note["id"], "note#1", "{note}");
+    assert!(served.ok(&["note", "--list"]).contains("Read by the till."));
+    assert_eq!(
+        served
+            .call("notes", json!({}))
+            .json()
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        served
+            .call("remove_note", json!({ "note": "note#1" }))
+            .status,
+        200
+    );
+    assert_eq!(served.call("notes", json!({})).json(), json!([]));
+
     // What the daemon refuses is said as it said it; what does not exist, too.
     let none = served.call("lane_diff", json!({ "lane": "9" }));
     assert_eq!(none.status, 404, "{}", none.body);
@@ -431,7 +481,7 @@ fn the_client_reads_and_writes_what_the_plugin_was_given() {
     }
     assert!(served
         .ok(&["status"])
-        .contains("Plugin ............ web 0.1.0 (read, write)"));
+        .contains("Plugin ............ web 0.2.0 (read, write)"));
 }
 
 #[test]
@@ -448,6 +498,17 @@ fn a_repository_that_lets_it_read_only_is_read_only_in_the_browser() {
     assert!(served
         .ok(&["lane", "comments", "1"])
         .contains("No comment waits"));
+    let note = served.call(
+        "add_note",
+        json!({ "on": "src/shop.ts", "text": "Read by the till." }),
+    );
+    assert_eq!(note.status, 403, "{}", note.body);
+    assert_eq!(
+        served
+            .call("why_graph", json!({ "target": "src/shop.ts" }))
+            .status,
+        200
+    );
 }
 
 #[test]

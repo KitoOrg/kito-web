@@ -8,7 +8,7 @@ Kito: it asks the repository's daemon what `kito` asks, through the
 daemon's API (version 1, `docs/api.md` in Kito), within the permissions
 the repository gives it. Nothing of Kito is linked into it.
 
-## What it does (0.1)
+## What it does (0.2)
 
 - **The lanes** of a repository, and where each stands.
 - **A lane**: what it is for, what it changes (files, functions and
@@ -18,11 +18,17 @@ the repository gives it. Nothing of Kito is linked into it.
   next edit, as with `kito lane comment`.
 - **Review**: where it stands, approve, request changes, withdraw.
   Approving brings nothing in: `kito integrate` does.
+- **Why**: for a function, a file or what a lane changed, the reasons it
+  is the way it is, which of its lines each reason wrote, who uses it,
+  which lanes are on it now, and the notes left on it. Earlier work is
+  found by the words of its reason.
+- **The log** of the main lane: each checkpoint and the changes it holds.
+- **Notes**: every note on the repository's code; leaving one, removing
+  one.
 - It follows the repository as it changes: no reloading.
 
-Not yet: the why graph, the log and notes; opening, closing and
-integrating lanes, and conflicts; a team signing in next to a
-`kito-server`.
+Not yet: opening, closing and integrating lanes, and conflicts; a team
+signing in next to a `kito-server`.
 
 ## Using it
 

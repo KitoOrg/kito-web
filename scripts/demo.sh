@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# A repository to look at the web client with: two lanes, one of them
-# commented and asked to change. It needs Kito built next to this
-# repository (`../kito`, or KITO_BIN), and `scripts/build.sh` run here.
+# A repository to look at the web client with: a lane that went in, a
+# note, and two open lanes, one of them commented and asked to change.
+# It needs Kito built next to this repository (`../kito`, or KITO_BIN),
+# and `scripts/build.sh` run here.
 #
 #   scripts/demo.sh [--port N]      # serves until stopped
 set -euo pipefail
@@ -43,19 +44,26 @@ kito init >/dev/null
 printf '.kito/\n' > .gitignore
 kito checkpoint -m "first version" >/dev/null
 
+# Something already went in through a lane, and a note was left on the code.
+kito lane open carol --intent "say what the shop takes off" --scope README.md >/dev/null
+printf '# Shop\n\nPrices, and the discounts taken off them.\n' > "$APP/.kito/lanes/1/work/README.md"
+kito integrate 1 >/dev/null
+kito lane close 1 >/dev/null
+kito note src/shop.ts:total "Called by the nightly billing job, outside this repository: do not rename." >/dev/null
+
 # Alice's agent puts the prices in cents, and renames a function on the way.
 kito lane open alice --intent "prices in cents" --scope ./ >/dev/null
-WORK="$APP/.kito/lanes/1/work"
+WORK="$APP/.kito/lanes/2/work"
 sed -i.bak 's/sum += price;/sum += Math.floor(price * 100);/' "$WORK/src/shop.ts" && rm "$WORK/src/shop.ts.bak"
-kito rename src/shop.ts:discount rebate --lane 1 >/dev/null
+kito rename src/shop.ts:discount rebate --lane 2 >/dev/null
 printf '\nPrices are kept in cents.\n' >> "$WORK/README.md"
-kito lane comment 1 "Half a cent is lost: round, do not floor." --on src/shop.ts:4 >/dev/null
-kito lane comment 1 "Say in the README why cents." >/dev/null
-kito lane request-changes 1 "See the comment on line 4." >/dev/null
+kito lane comment 2 "Half a cent is lost: round, do not floor." --on src/shop.ts:4 >/dev/null
+kito lane comment 2 "Say in the README why cents." >/dev/null
+kito lane request-changes 2 "See the comment on line 4." >/dev/null
 
 # Bob's agent writes a receipt, and has asked to be integrated.
 kito lane open bob --intent "a receipt that lists every price" --scope src/cart.ts >/dev/null
-WORK2="$APP/.kito/lanes/2/work"
+WORK2="$APP/.kito/lanes/3/work"
 cat >> "$WORK2/src/cart.ts" <<'TS'
 
 export function receipt(prices: number[]): string {

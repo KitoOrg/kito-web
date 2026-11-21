@@ -1,7 +1,7 @@
 <script>
   // What a lane did to one file: its functions, its lines, and what was
   // said on them.
-  import { ask, focus } from './api.js';
+  import { ask, focus, whyLink } from './api.js';
   import Thread from './Thread.svelte';
 
   let { lane, file, threads, changed } = $props();
@@ -61,7 +61,9 @@
 <section class="panel file" id={`file-${file.path}`}>
   <header>
     <span class={`chip ${file.change === 'removed' ? 'bad' : file.change === 'added' ? 'ok' : ''}`}>{file.change}</span>
-    <h2 class="mono">{file.path}</h2>
+    <h2 class="mono">
+      {#if file.change === 'removed'}{file.path}{:else}<a href={whyLink(file.path, lane)} title="Why it is the way it is">{file.path}</a>{/if}
+    </h2>
     {#if file.was}<span class="soft">was <span class="mono">{file.was}</span></span>{/if}
     <span class="grow"></span>
     {#if file.binary}
@@ -77,7 +79,11 @@
       {#each file.symbols as symbol (symbol.symbol)}
         <li>
           <span class="change">{symbol.change}</span>
-          <span class="mono">{name(symbol)}</span>
+          {#if symbol.change === 'removed'}
+            <span class="mono">{name(symbol)}</span>
+          {:else}
+            <a class="mono" href={whyLink(symbol.symbol, lane)} title="Why it is the way it is">{name(symbol)}</a>
+          {/if}
           <span class="faint">{where(symbol)}</span>
           {#if symbol.was}<span class="soft">was <span class="mono">{symbol.was}</span></span>{/if}
           {#each symbol.intents ?? [] as intent}
@@ -172,6 +178,9 @@
   h2 {
     font-size: 14px;
     overflow-wrap: anywhere;
+  }
+  h2 a {
+    color: inherit;
   }
   .grow {
     flex: 1;
