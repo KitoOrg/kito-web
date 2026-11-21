@@ -7,6 +7,7 @@
   import Home from './Home.svelte';
   import Lane from './Lane.svelte';
   import Log from './Log.svelte';
+  import Logo from './Logo.svelte';
   import Notes from './Notes.svelte';
   import SignIn from './SignIn.svelte';
   import Why from './Why.svelte';
@@ -123,7 +124,7 @@
 </script>
 
 <header class="top">
-  <a class="logo" href={about?.team ? home : '#/'}>Kito</a>
+  <a class="logo" href={about?.team ? home : '#/'}><Logo /> Kito</a>
   {#if about?.team && who}
     <span class="crumb">
       <a href={home}>{location.host}</a>
@@ -228,8 +229,14 @@
     color: inherit;
   }
   .logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     font-weight: 700;
     font-size: 17px;
+    letter-spacing: -0.01em;
+    /* The mark's own colour, on the dark bar. */
+    --mark: var(--on-chrome);
   }
   .logo:hover {
     text-decoration: none;

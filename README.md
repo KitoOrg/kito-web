@@ -8,7 +8,7 @@ Kito: it asks the repository's daemon what `kito` asks, through the
 daemon's API (version 1, `docs/api.md` in Kito), within the permissions
 the repository gives it. Nothing of Kito is linked into it.
 
-## What it does (0.8)
+## What it does (0.9)
 
 - **The lanes** of a repository, as a list: where each stands, whose it
   is, what it declared, which other lanes are on the same code. The
@@ -142,6 +142,15 @@ cargo test                          # needs Kito built in ../kito, or KITO_BIN
 
 The tests run `kito-web` under a real Kito: installed as a plugin,
 enabled in a repository, asked over HTTP.
+
+## How it looks
+
+Kito's mark is three lanes that come in and become one. The colours are
+indigo on a cool paper, light and dark; green, amber, red and slate say
+where a lane stands, and are not the brand's. The typeface is
+[Geist](https://vercel.com/font) and Geist Mono (Vercel, SIL Open Font
+License 1.1, in `licenses/`), carried with the client: a browser that
+opens it asks nothing of anybody else.
 
 ## License
 

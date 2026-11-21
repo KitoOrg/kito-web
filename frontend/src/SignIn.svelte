@@ -1,4 +1,5 @@
 <script>
+  import Logo from './Logo.svelte';
   // Behind a server, for somebody it does not know yet: the ways to sign
   // in that its plugins offer, and a token for those who were given one.
   import { openSession, ways } from './api.js';
@@ -28,7 +29,7 @@
 </script>
 
 <div class="panel signin">
-  <h1>Sign in</h1>
+  <h1><Logo size={28} /> Sign in to Kito</h1>
   {#if methods.length > 0}
     <div class="ways">
       {#each methods as way}
@@ -64,6 +65,9 @@
   }
   h1 {
     margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
   }
   .ways {
     display: grid;
