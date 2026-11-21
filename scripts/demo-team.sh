@@ -61,10 +61,36 @@ kito lane comment 2 "Half a cent is lost: round, do not floor." --on src/shop.ts
 kito lane request-changes 2 "See the comment on line 4." >/dev/null
 cd "$DEMO"
 
+# A registry of files next to the server, with the plugins built beside
+# this repository (`../kito-kitchen/plugin`, …): what the page of the
+# server's plugins installs from.
+REGISTRY="$DEMO/registry"
+mkdir -p "$REGISTRY/plugins"
+PLATFORM="$(uname -s | tr '[:upper:]' '[:lower:]' | sed 's/darwin/macos/')-$(uname -m | sed 's/arm64/aarch64/')"
+[ "${PLATFORM%%-*}" = macos ] && PLATFORM="$(echo "$PLATFORM" | sed 's/aarch64/arm64/')"
+INDEX=""
+for built in "$HERE"/../kito-*/plugin; do
+  [ -f "$built/kito-plugin.toml" ] || continue
+  name="$(sed -n 's/^name = "\(.*\)"/\1/p' "$built/kito-plugin.toml" | head -1)"
+  version="$(sed -n 's/^version = "\(.*\)"/\1/p' "$built/kito-plugin.toml" | head -1)"
+  about="$(sed -n 's/^description = "\(.*\)"/\1/p' "$built/kito-plugin.toml" | head -1)"
+  api="$(sed -n 's/^api = \(.*\)/\1/p' "$built/kito-plugin.toml" | head -1)"
+  [ "$name" = web ] && continue
+  mkdir -p "$DEMO/pack/kito-$name" && cp "$built"/* "$DEMO/pack/kito-$name/"
+  tar -czf "$REGISTRY/kito-$name-$version.tar.gz" -C "$DEMO/pack" "kito-$name"
+  sum="$(sha256sum "$REGISTRY/kito-$name-$version.tar.gz" | cut -d' ' -f1)"
+  printf '{"name":"%s","about":"%s","versions":{"%s":{"api":%s,"files":{"%s":{"url":"kito-%s-%s.tar.gz","sha256":"%s"}}}}}\n' \
+    "$name" "$about" "$version" "$api" "$PLATFORM" "$name" "$version" "$sum" > "$REGISTRY/plugins/$name.json"
+  INDEX="$INDEX${INDEX:+,}\"$name\":{\"about\":\"$about\",\"latest\":\"$version\"}"
+done
+printf '{"registry":1,"plugins":{%s}}\n' "$INDEX" > "$REGISTRY/index.json"
+export KITO_REGISTRY="file://$REGISTRY"
+
 kito-server --dir "$SERVER" plugin add --path "$HERE/plugin" >/dev/null
 kito-server --dir "$SERVER" plugin enable web >/dev/null
-echo "ada, who may do everything:"
+echo "ada, who may do everything, and is an administrator of the server:"
 kito-server --dir "$SERVER" user add ada | grep '^kito_'
+kito-server --dir "$SERVER" user admin ada >/dev/null
 echo "carol, who may read shop:"
 kito-server --dir "$SERVER" user add carol --role read --repo shop | grep '^kito_'
 echo "Open http://$HTTP/ and sign in with one of the tokens."

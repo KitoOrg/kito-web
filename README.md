@@ -8,7 +8,7 @@ Kito: it asks the repository's daemon what `kito` asks, through the
 daemon's API (version 1, `docs/api.md` in Kito), within the permissions
 the repository gives it. Nothing of Kito is linked into it.
 
-## What it does (0.4)
+## What it does (0.5)
 
 - **The lanes** of a repository, and where each stands.
 - **A lane**: what it is for, what it changes (files, functions and
@@ -87,6 +87,14 @@ kito-server serve --http 0.0.0.0:7443     # https://<the server>:7443/
   and it answers to its server alone.
 - `kito-server plugin enable web --only read,pages` makes it a viewer
   for everybody.
+- **The server's plugins**, for its administrators (`kito-server user
+  admin <name>`, on the server's machine): what is installed and what
+  each was given, what the registry lists, and install, enable, disable
+  and remove. A plugin is installed by its name from the server's
+  registry and nothing else; what it is given is ticked before it is
+  enabled; the plugin that serves these pages is not taken out from
+  them. The server decides and does all of it (`/-/admin/plugins`, Kito
+  0.23): this page only asks.
 
 `scripts/demo-team.sh` makes a server to look at, with two people and
 two repositories, and serves it on this machine.

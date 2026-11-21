@@ -1,5 +1,6 @@
 <script>
   import { behindServer, info, me, signOut } from './api.js';
+  import Admin from './Admin.svelte';
   import Board from './Board.svelte';
   import Code from './Code.svelte';
   import Lane from './Lane.svelte';
@@ -68,7 +69,7 @@
     if (name === 'why' && rest.length > 0) {
       return { name: 'why', target: decodeURIComponent(rest.join('/')), lane: asked.get('lane') };
     }
-    if (['why', 'log', 'notes'].includes(name)) return { name };
+    if (['why', 'log', 'notes', 'admin'].includes(name)) return { name };
     return { name: 'lanes' };
   });
   // The part of the client a page belongs to.
@@ -110,6 +111,9 @@
     </nav>
   {/if}
   <span class="grow"></span>
+  {#if about?.team && who?.admin}
+    <a class="admin" href="#/admin" aria-current={page.name === 'admin' ? 'page' : undefined}>Server plugins</a>
+  {/if}
   {#if about?.team && who}
     <span class="soft who">{who.user}</span>
     <button class="quiet" onclick={leave}>Sign out</button>
@@ -125,6 +129,16 @@
     <p class="soft">…</p>
   {:else if about.team && !who}
     <SignIn />
+  {:else if about.team && page.name === 'admin'}
+    <!-- The server's own: whatever repository is looked at, or none. -->
+    {#if who.admin}
+      <Admin />
+    {:else}
+      <div class="panel closed">
+        <h1>For the server’s administrators</h1>
+        <p class="soft">Whoever runs this server says who they are, on its machine.</p>
+      </div>
+    {/if}
   {:else if about.team && !repo}
     <div class="panel closed">
       {#if who.repos.length === 0}
@@ -205,6 +219,17 @@
     color: var(--ink);
   }
   nav a[aria-current='page'] {
+    background: var(--bg);
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .admin {
+    font-size: 13px;
+    color: var(--soft);
+    padding: 2px 10px;
+    border-radius: 6px;
+  }
+  .admin[aria-current='page'] {
     background: var(--bg);
     color: var(--ink);
     font-weight: 600;

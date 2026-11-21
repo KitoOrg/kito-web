@@ -62,6 +62,21 @@ export async function openSession(token) {
   return read(response);
 }
 
+/** Behind a server, for its administrators: its plugins, and what the registry lists. */
+export async function adminPlugins() {
+  return read(await fetch('/-/admin/plugins', { headers: { 'x-kito': '1' } }));
+}
+
+/** Behind a server, for its administrators: install, enable, disable or remove a plugin. */
+export async function adminChange(body) {
+  const response = await fetch('/-/admin/plugins', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-kito': '1' },
+    body: JSON.stringify(body),
+  });
+  return read(response);
+}
+
 /** Behind a server: the session ends. */
 export async function signOut() {
   return read(await fetch('/-/session', { method: 'DELETE' }));
