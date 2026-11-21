@@ -300,10 +300,16 @@ fn a_kito_server_serves_it_to_whoever_signs_in() {
             && enabled.contains("pages under /"),
         "{enabled}"
     );
-    let ada = token(ok(&["user", "add", "ada"]));
-    let carol = token(ok(&[
-        "user", "add", "carol", "--role", "read", "--repo", "shop",
+    let ada = token(ok(&[
+        "user",
+        "add",
+        "ada",
+        "--repo",
+        "shop:integrate",
+        "--repo",
+        "books:integrate",
     ]));
+    let carol = token(ok(&["user", "add", "carol", "--repo", "shop:read"]));
 
     struct Serving(std::process::Child, PathBuf, PathBuf);
     impl Drop for Serving {

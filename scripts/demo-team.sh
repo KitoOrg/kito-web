@@ -122,14 +122,13 @@ export KITO_REGISTRY="file://$REGISTRY"
 
 kito-server --dir "$SERVER" plugin add --path "$HERE/plugin" >/dev/null
 kito-server --dir "$SERVER" plugin enable web >/dev/null
-echo "ada, who may do everything, and is an administrator of the server:"
-kito-server --dir "$SERVER" user add ada | grep '^kito_'
-kito-server --dir "$SERVER" user admin ada >/dev/null
+echo "ada, an admin of the server: every repository, its people and its plugins:"
+kito-server --dir "$SERVER" user add ada --role admin | grep '^kito_'
 echo "bob, who may write in shop, and not integrate:"
-BOB="$(kito-server --dir "$SERVER" user add bob --role write --repo shop | grep '^kito_')"
+BOB="$(kito-server --dir "$SERVER" user add bob --repo shop:write | grep '^kito_')"
 echo "$BOB"
 echo "carol, who may read shop:"
-kito-server --dir "$SERVER" user add carol --role read --repo shop | grep '^kito_'
+kito-server --dir "$SERVER" user add carol --repo shop:read | grep '^kito_'
 echo "Open http://$HTTP/ and sign in with one of the tokens."
 kito-server --dir "$SERVER" serve --plain --listen 127.0.0.1:0 --http "$HTTP" &
 SERVING=$!
