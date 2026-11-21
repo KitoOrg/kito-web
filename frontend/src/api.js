@@ -15,19 +15,56 @@ async function read(response) {
   return body;
 }
 
+// Behind a Kito server, for a team: the repository the client is looking
+// at. The server itself is asked about it, as whoever is signed in.
+let served = null;
+
+/** From now on the client asks the server it is behind, about this repository. */
+export function behindServer(repository) {
+  served = repository;
+}
+
 /** One question for the daemon: a method of its API and its parameters. */
 export async function ask(method, params = {}) {
-  const response = await fetch('/api/call', {
+  // A page of another site cannot set these headers: they mark the client's own requests.
+  const [address, mark] = served === null ? ['api/call', 'x-kito-web'] : [`/-/api/${encodeURIComponent(served)}`, 'x-kito'];
+  const response = await fetch(address, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-kito-web': '1' },
+    headers: { 'content-type': 'application/json', [mark]: '1' },
     body: JSON.stringify({ method, params }),
   });
   return read(response);
 }
 
-/** What this is, and whether this browser was given the address. */
+/** What this is: on this machine, whether this browser was given the address; behind a server, that it is. */
 export async function info() {
-  return read(await fetch('/api/info'));
+  return read(await fetch('api/info'));
+}
+
+/** Behind a server: who is signed in and the repositories they may use; null: nobody. */
+export async function me() {
+  const response = await fetch('/-/me');
+  return response.status === 401 ? null : read(response);
+}
+
+/** Behind a server: the ways to sign in that its plugins offer. */
+export async function ways() {
+  return read(await fetch('/-/sign-in'));
+}
+
+/** Behind a server: a session for whoever holds a token of it. */
+export async function openSession(token) {
+  const response = await fetch('/-/session', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+  return read(response);
+}
+
+/** Behind a server: the session ends. */
+export async function signOut() {
+  return read(await fetch('/-/session', { method: 'DELETE' }));
 }
 
 /**
@@ -41,8 +78,13 @@ export function watch(told) {
   (async () => {
     while (!stopped) {
       try {
-        const query = after === null ? '' : `?after=${after}`;
-        const answer = await read(await fetch(`/api/events${query}`));
+        let answer;
+        if (served === null) {
+          const query = after === null ? '' : `?after=${after}`;
+          answer = await read(await fetch(`api/events${query}`));
+        } else {
+          answer = await ask('events', { after, wait_ms: 20000 });
+        }
         if (stopped) return;
         const first = after === null;
         after = answer.next;

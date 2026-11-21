@@ -8,7 +8,7 @@ Kito: it asks the repository's daemon what `kito` asks, through the
 daemon's API (version 1, `docs/api.md` in Kito), within the permissions
 the repository gives it. Nothing of Kito is linked into it.
 
-## What it does (0.3)
+## What it does (0.4)
 
 - **The lanes** of a repository, and where each stands.
 - **A lane**: what it is for, what it changes (files, functions and
@@ -33,9 +33,12 @@ the repository gives it. Nothing of Kito is linked into it.
 - **Notes**: every note on the repository's code; leaving one, removing
   one.
 - It follows the repository as it changes: no reloading.
+- **For a team**, behind a Kito server: the same client at the server's
+  own address, for whoever signs in there, about the repositories they
+  may use.
 
-Not yet: a team signing in next to a `kito-server`; extending a lane's
-scope, renaming a function, permanent lanes' catch-up.
+Not yet: extending a lane's scope, renaming a function, permanent lanes'
+catch-up.
 
 ## Using it
 
@@ -60,6 +63,33 @@ and the client says so.
 `scripts/demo.sh` makes a repository to look at (lanes that went in, a
 note, a lane with comments, a request for changes and a conflict waiting
 for it) and serves it.
+
+## Behind a server, for a team
+
+A Kito server that enables the plugin serves the client itself, at its
+HTTP address:
+
+```bash
+kito-server plugin add --path plugin
+kito-server plugin enable web
+kito-server serve --http 0.0.0.0:7443     # https://<the server>:7443/
+```
+
+- Whoever opens the address **signs in**: in one of the ways the
+  server's plugins offer (`kito-github`, `kito-oidc`), or with the token
+  the server gave them.
+- They see **the repositories they may use**, and choose one
+  (`?repo=shop`). What they may do there is what the server says: one
+  who may only read is shown as much, and refused the rest.
+- The client asks **the server itself** about a repository
+  (`/-/api/<repository>`), as the person. This program only hands out
+  the client's files: the server never gives it a session or a token,
+  and it answers to its server alone.
+- `kito-server plugin enable web --only read,pages` makes it a viewer
+  for everybody.
+
+`scripts/demo-team.sh` makes a server to look at, with two people and
+two repositories, and serves it on this machine.
 
 ## How it is made
 

@@ -10,8 +10,12 @@
 //! ```text
 //! kito web [--port N]
 //! ```
+//!
+//! A Kito server that enabled it runs it as `kito-web serve-pages`
+//! instead, for a team: see `team.rs`.
 
 mod daemon;
+mod team;
 
 use axum::extract::{Query, Request, State};
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode, Uri};
@@ -95,11 +99,11 @@ impl App {
 }
 
 /// Compared whole, whatever differs: the time taken says nothing.
-fn same(a: &[u8], b: &[u8]) -> bool {
+pub(crate) fn same(a: &[u8], b: &[u8]) -> bool {
     a.len() == b.len() && a.iter().zip(b).fold(0u8, |diff, (x, y)| diff | (x ^ y)) == 0
 }
 
-fn refused(status: StatusCode, message: &str) -> Response {
+pub(crate) fn refused(status: StatusCode, message: &str) -> Response {
     (status, Json(json!({ "error": message }))).into_response()
 }
 
@@ -118,7 +122,11 @@ async fn guard(State(app): State<App>, request: Request, next: Next) -> Response
             "kito-web answers on this machine only",
         );
     }
-    let mut response = next.run(request).await;
+    sealed(next.run(request).await)
+}
+
+/// Headers that keep the answers where they belong.
+pub(crate) fn sealed(mut response: Response) -> Response {
     let headers = response.headers_mut();
     headers.insert(
         header::X_CONTENT_TYPE_OPTIONS,
@@ -163,8 +171,11 @@ async fn page(State(app): State<App>, uri: Uri, Query(opened): Query<Opened>) ->
         ];
         return (StatusCode::SEE_OTHER, headers).into_response();
     }
-    let path = uri.path().trim_start_matches('/');
-    // What is no file of the client is one of its pages.
+    client_file(uri.path().trim_start_matches('/'))
+}
+
+/// A file of the web client; what is no file of it is one of its pages.
+pub(crate) fn client_file(path: &str) -> Response {
     let (name, file) = match Client::get(path) {
         Some(file) if !path.is_empty() => (path, file),
         _ => match Client::get("index.html") {
@@ -210,7 +221,7 @@ fn failed(failure: daemon::Failure) -> Response {
         .into_response()
 }
 
-fn answered(value: Value) -> Response {
+pub(crate) fn answered(value: Value) -> Response {
     ([(header::CACHE_CONTROL, "no-store")], Json(value)).into_response()
 }
 
@@ -308,6 +319,10 @@ fn usage() -> ExitCode {
 
 #[tokio::main]
 async fn main() -> ExitCode {
+    // Run by a Kito server, for a team.
+    if std::env::args().nth(1).as_deref() == Some("serve-pages") {
+        return team::serve().await;
+    }
     let mut port = PORT;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {

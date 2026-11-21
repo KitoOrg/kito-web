@@ -1,12 +1,19 @@
 name = "web"
-version = "0.3.0"
+version = "0.4.0"
 description = "Kito in a browser: lanes and their review, why code is the way it is, the log, notes"
 api = 1
 # It reads the repository; writes comments, verdicts and notes, opens and
 # closes lanes; and asks for integrations and decides conflicts, for
 # whoever opened it. `kito plugin enable web --only read,write` leaves
 # integrating to `kito integrate`; `--only read` makes it a viewer.
-permissions = ["read", "write", "integrate"]
+#
+# On a Kito server, `pages` lets it serve the same client at the server's
+# address, to whoever signs in there: what it may ask of a repository is
+# then held both to these and to what the person may do.
+permissions = ["read", "write", "integrate", "pages"]
+
+[pages]
+mount = "/"
 
 [[command]]
 name = "web"

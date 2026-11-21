@@ -6,6 +6,8 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 // first, so that the browser holds its cookie.
 export default defineConfig({
   plugins: [svelte()],
+  // Its files are named from where it is: a server may have it under a path.
+  base: './',
   build: { outDir: 'dist', emptyOutDir: true, target: 'es2022' },
-  server: { proxy: { '/api': 'http://127.0.0.1:7423' } },
+  server: { proxy: { '/api': 'http://127.0.0.1:7423', '/-': 'http://127.0.0.1:7423' } },
 });
