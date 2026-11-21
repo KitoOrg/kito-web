@@ -17,6 +17,10 @@
   --ok-bg: #e2f2e2;
   --bad: #9b2a20;
   --bad-bg: #fbe6e3;
+  --done: #6a3fc0;
+  --done-bg: #ece5fa;
+  --chrome: #22262d;
+  --chrome-ink: #f1f0ec;
   --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
   --sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
   color-scheme: light dark;
@@ -42,6 +46,10 @@
     --ok-bg: #18301c;
     --bad: #f0aaa3;
     --bad-bg: #3a1c1a;
+    --done: #c3acf7;
+    --done-bg: #2b2147;
+    --chrome: #0f1013;
+    --chrome-ink: #ecebe6;
   }
 }
 
@@ -169,6 +177,41 @@ textarea {
   background: var(--bad-bg);
   color: var(--bad);
   border-color: transparent;
+}
+.chip.done {
+  background: var(--done-bg);
+  color: var(--done);
+  border-color: transparent;
+}
+
+/* Where a lane stands, at the start of its row: open, waiting, stopped, done. */
+.ring {
+  width: 18px;
+  height: 18px;
+  margin-top: 3px;
+  border: 2px solid var(--ok);
+  border-radius: 50%;
+  flex: none;
+}
+.ring.warn {
+  border-color: var(--warn);
+}
+.ring.bad {
+  border-color: var(--bad);
+}
+.ring.done {
+  border-color: var(--done);
+  background: var(--done);
+}
+
+/* Said to whoever does not see the page, shown to nobody. */
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .error {

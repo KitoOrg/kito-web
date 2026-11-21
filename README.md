@@ -8,9 +8,12 @@ Kito: it asks the repository's daemon what `kito` asks, through the
 daemon's API (version 1, `docs/api.md` in Kito), within the permissions
 the repository gives it. Nothing of Kito is linked into it.
 
-## What it does (0.5)
+## What it does (0.6)
 
-- **The lanes** of a repository, and where each stands.
+- **The lanes** of a repository, as a list: where each stands, whose it
+  is, what it declared, which other lanes are on the same code. The
+  list narrows to those that wait for a review, were asked to change,
+  have conflicts to decide, are yours, or are closed.
 - **A lane**: what it is for, what it changes (files, functions and
   lines), what was said about it.
 - **Comments**: on a line of the diff, or on the lane as a whole;
@@ -78,9 +81,15 @@ kito-server serve --http 0.0.0.0:7443     # https://<the server>:7443/
 - Whoever opens the address **signs in**: in one of the ways the
   server's plugins offer (`kito-github`, `kito-oidc`), or with the token
   the server gave them.
-- They see **the repositories they may use**, and choose one
-  (`?repo=shop`). What they may do there is what the server says: one
-  who may only read is shown as much, and refused the rest.
+- They land on **what needs them**, across the repositories they may
+  use: conflicts to decide, lanes of theirs that were asked to change,
+  lanes that wait for their review, or for somebody who may integrate
+  when they may. Beside it: the repositories with what is open in
+  each, who is at work, and the lanes that are on the same code. It is
+  read from what each repository says of its lanes: nothing is kept.
+- A repository is chosen from there (`?repo=shop`). What they may do
+  in it is what the server says: one who may only read is shown as
+  much, and refused the rest.
 - The client asks **the server itself** about a repository
   (`/-/api/<repository>`), as the person. This program only hands out
   the client's files: the server never gives it a session or a token,

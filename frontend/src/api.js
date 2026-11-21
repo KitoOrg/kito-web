@@ -26,8 +26,17 @@ export function behindServer(repository) {
 
 /** One question for the daemon: a method of its API and its parameters. */
 export async function ask(method, params = {}) {
+  return askIn(served, method, params);
+}
+
+/**
+ * The same question about a repository that is named: behind a server,
+ * any of those one may use. Null: the one this program serves, on one's
+ * own machine.
+ */
+export async function askIn(repository, method, params = {}) {
   // A page of another site cannot set these headers: they mark the client's own requests.
-  const [address, mark] = served === null ? ['api/call', 'x-kito-web'] : [`/-/api/${encodeURIComponent(served)}`, 'x-kito'];
+  const [address, mark] = repository === null ? ['api/call', 'x-kito-web'] : [`/-/api/${encodeURIComponent(repository)}`, 'x-kito'];
   const response = await fetch(address, {
     method: 'POST',
     headers: { 'content-type': 'application/json', [mark]: '1' },
