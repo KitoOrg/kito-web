@@ -52,6 +52,8 @@ const READS: &[&str] = &[
     // The text of a file: its content is asked by the ID the list gives.
     "lane_files",
     "get_blobs",
+    // How an integration that was asked for ended.
+    "integration_result",
 ];
 const WRITES: &[&str] = &[
     "comment",
@@ -59,6 +61,10 @@ const WRITES: &[&str] = &[
     "verdict",
     "add_note",
     "remove_note",
+    "open_lane",
+    "close_lane",
+    "request_integration",
+    "resolve_conflict",
 ];
 
 #[derive(Clone)]

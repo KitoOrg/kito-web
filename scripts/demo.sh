@@ -71,6 +71,14 @@ export function receipt(prices: number[]): string {
 }
 TS
 
+# Meanwhile the same line went in another way: alice's lane will not
+# compose with it, and has a conflict to decide when it asks to go in.
+kito lane open dana --intent "prices rounded to whole units" --scope src/shop.ts:total >/dev/null
+WORK4="$APP/.kito/lanes/4/work"
+sed -i.bak 's/sum += price;/sum += Math.round(price);/' "$WORK4/src/shop.ts" && rm "$WORK4/src/shop.ts.bak"
+kito integrate 4 >/dev/null
+kito lane close 4 >/dev/null
+
 kito plugin add --path "$HERE/plugin" >/dev/null
 kito plugin enable web >/dev/null
 exec kito web "$@"

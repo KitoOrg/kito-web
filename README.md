@@ -8,7 +8,7 @@ Kito: it asks the repository's daemon what `kito` asks, through the
 daemon's API (version 1, `docs/api.md` in Kito), within the permissions
 the repository gives it. Nothing of Kito is linked into it.
 
-## What it does (0.2)
+## What it does (0.3)
 
 - **The lanes** of a repository, and where each stands.
 - **A lane**: what it is for, what it changes (files, functions and
@@ -17,7 +17,14 @@ the repository gives it. Nothing of Kito is linked into it.
   answers; resolving. The agent working in the lane is told before its
   next edit, as with `kito lane comment`.
 - **Review**: where it stands, approve, request changes, withdraw.
-  Approving brings nothing in: `kito integrate` does.
+  Approving brings nothing in: integrating does.
+- **Integrating**: a lane is asked to go in, and the page says how it
+  ended: integrated, checks that failed (with what they printed),
+  changes outside its scope, a wait (for its review, or a gate), or
+  conflicts.
+- **Conflicts**: what the lane and its target both did, side by side;
+  keep one, or write the text. The next integration applies it.
+- **Opening and closing** a lane: for whom, why, and what it will change.
 - **Why**: for a function, a file or what a lane changed, the reasons it
   is the way it is, which of its lines each reason wrote, who uses it,
   which lanes are on it now, and the notes left on it. Earlier work is
@@ -27,8 +34,8 @@ the repository gives it. Nothing of Kito is linked into it.
   one.
 - It follows the repository as it changes: no reloading.
 
-Not yet: opening, closing and integrating lanes, and conflicts; a team
-signing in next to a `kito-server`.
+Not yet: a team signing in next to a `kito-server`; extending a lane's
+scope, renaming a function, permanent lanes' catch-up.
 
 ## Using it
 
@@ -36,7 +43,7 @@ signing in next to a `kito-server`.
 scripts/build.sh                    # the client, then the program: plugin/
 kito plugin add --path plugin       # installed for you
 cd your-repository
-kito plugin enable web              # this repository lets it read and write
+kito plugin enable web              # this repository lets it read, write and integrate
 kito web                            # prints the address to open
 ```
 
@@ -46,11 +53,13 @@ prints carries a token, once: the browser that opens it is let in, and
 nobody else on the machine is. What is done in the browser is done by
 whoever runs the repository.
 
-`kito plugin enable web --only read` makes it read-only: the daemon then
-refuses comments and verdicts, and the client says so.
+`kito plugin enable web --only read,write` leaves integrating to `kito
+integrate`; `--only read` makes it a viewer. The daemon refuses the rest,
+and the client says so.
 
-`scripts/demo.sh` makes a repository with two lanes, comments and a
-request for changes, and serves it.
+`scripts/demo.sh` makes a repository to look at (lanes that went in, a
+note, a lane with comments, a request for changes and a conflict waiting
+for it) and serves it.
 
 ## How it is made
 

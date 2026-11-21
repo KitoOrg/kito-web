@@ -2,7 +2,9 @@
   // A lane: what it is for, what it changes, what was said, where its
   // review stands.
   import { ask, watch } from './api.js';
+  import Conflicts from './Conflicts.svelte';
   import FileDiff from './FileDiff.svelte';
+  import Integrate from './Integrate.svelte';
   import Review from './Review.svelte';
   import State from './State.svelte';
   import Thread from './Thread.svelte';
@@ -90,6 +92,9 @@
     }
   }
 
+  // The conflicts no integration has applied a decision to yet.
+  let conflicts = $derived((info?.conflicts ?? []).filter((conflict) => typeof conflict === 'object' && !conflict.resolved));
+
   let totals = $derived(
     (diff?.files ?? []).reduce((sum, file) => ({ added: sum.added + file.added, removed: sum.removed + file.removed }), {
       added: 0,
@@ -131,6 +136,9 @@
 
   <div class="columns">
     <div class="main">
+      {#if conflicts.length > 0}
+        <Conflicts {conflicts} target={diff.onto} changed={load} />
+      {/if}
       <p class="summary soft">
         {diff.files.length}
         {diff.files.length === 1 ? 'file' : 'files'} changed,
@@ -148,6 +156,7 @@
 
     <aside>
       <Review {lane} {review} changed={load} />
+      <Integrate {lane} {info} changed={load} />
 
       <section class="panel said" aria-label="Comments on the lane">
         <h2>On the lane</h2>

@@ -1,10 +1,12 @@
 name = "web"
-version = "0.2.0"
+version = "0.3.0"
 description = "Kito in a browser: lanes and their review, why code is the way it is, the log, notes"
 api = 1
-# It reads the repository, and writes comments, verdicts and notes for whoever
-# opened it. It does not integrate: that stays `kito integrate`.
-permissions = ["read", "write"]
+# It reads the repository; writes comments, verdicts and notes, opens and
+# closes lanes; and asks for integrations and decides conflicts, for
+# whoever opened it. `kito plugin enable web --only read,write` leaves
+# integrating to `kito integrate`; `--only read` makes it a viewer.
+permissions = ["read", "write", "integrate"]
 
 [[command]]
 name = "web"

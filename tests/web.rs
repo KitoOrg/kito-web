@@ -463,10 +463,10 @@ fn the_client_reads_and_writes_what_the_plugin_was_given() {
     // what the plugin was not given, and not what it was.
     for method in [
         "configure",
-        "request_integration",
         "plugin_key",
         "shutdown",
-        "open_lane",
+        "put_file",
+        "rollback",
         "ping",
     ] {
         let refused = served.call(method, json!({ "lane": "1" }));
@@ -481,7 +481,82 @@ fn the_client_reads_and_writes_what_the_plugin_was_given() {
     }
     assert!(served
         .ok(&["status"])
-        .contains("Plugin ............ web 0.2.0 (read, write)"));
+        .contains("Plugin ............ web 0.3.0 (read, write, integrate)"));
+}
+
+#[test]
+fn lanes_are_opened_integrated_and_closed_from_the_browser() {
+    let served = Served::start(None);
+
+    // Asked to integrate, the lane goes in; the answer waits for how it ended.
+    let asked = served
+        .call("request_integration", json!({ "lane": "1" }))
+        .json();
+    let job = asked["job"]
+        .as_str()
+        .unwrap_or_else(|| panic!("{asked}"))
+        .to_owned();
+    let ended = served
+        .call(
+            "integration_result",
+            json!({ "job": job, "wait_ms": 20000 }),
+        )
+        .json();
+    assert_eq!(ended["state"], "done", "{ended}");
+    assert_eq!(ended["result"]["result"], "integrated", "{ended}");
+    let main = std::fs::read_to_string(served.root.join("src/shop.ts")).unwrap();
+    assert_eq!(main, "export const price = 0.5;\n");
+
+    // A lane is opened for an agent, with why and what; and closed.
+    let opened = served.call(
+        "open_lane",
+        json!({ "agent": "bob", "intent": "a price for two", "scope": ["src/shop.ts"] }),
+    );
+    assert_eq!(opened.status, 200, "{}", opened.body);
+    let lane = opened.json();
+    assert_eq!(lane["id"], "lane/2", "{lane}");
+    assert!(
+        std::path::Path::new(lane["workdir"].as_str().unwrap()).is_dir(),
+        "{lane}"
+    );
+    // An intent that says nothing is refused as Kito refuses it.
+    let vague = served.call(
+        "open_lane",
+        json!({ "agent": "bob", "intent": "fix", "scope": ["./"] }),
+    );
+    assert_eq!(vague.status, 400, "{}", vague.body);
+    assert_eq!(
+        served.call("close_lane", json!({ "lane": "2" })).status,
+        200
+    );
+    let open: Vec<String> = served
+        .call("lanes", json!({}))
+        .json()
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|lane| lane["id"].to_string())
+        .collect();
+    assert_eq!(open, ["\"lane/1\""]);
+}
+
+#[test]
+fn a_repository_may_leave_integrating_to_the_command_line() {
+    let served = Served::start(Some("read,write"));
+    assert_eq!(
+        served
+            .call("comment", json!({ "lane": "1", "text": "Half as much?" }))
+            .status,
+        200
+    );
+    let refused = served.call("request_integration", json!({ "lane": "1" }));
+    assert_eq!(refused.status, 403, "{}", refused.body);
+    assert!(
+        refused.body.contains("it needs the permission `integrate`"),
+        "{}",
+        refused.body
+    );
+    assert!(served.ok(&["integrate", "1"]).contains("integrated"));
 }
 
 #[test]
