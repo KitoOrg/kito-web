@@ -182,7 +182,8 @@
   <p class="soft">…</p>
 {:else}
   <div class="head">
-    <h1>{info.task ?? info.intent ?? 'no intent said'}</h1>
+    <h1>{info.task?.startsWith('task#') ? (info.intent ?? info.task) : (info.task ?? info.intent ?? 'no intent said')}</h1>
+    {#if info.task?.startsWith('task#')}<p class="faint">For <a href={`#/tasks?task=${encodeURIComponent(info.task)}`}>{info.task}</a></p>{/if}
     <State lane={info} />
   </div>
   <p class="sub soft">

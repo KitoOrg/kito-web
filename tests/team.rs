@@ -493,6 +493,21 @@ fn a_kito_server_serves_it_to_whoever_signs_in() {
         403
     );
 
+    // Tasks: asked for by one who may write, seen by a reader, not changed by one.
+    let task = call(
+        &ada,
+        "task_add",
+        json!({ "title": "Prices in cents", "for": "carol" }),
+    );
+    assert_eq!(task.status, 200, "{}", task.body);
+    let listed = call(&carol, "tasks", json!({})).json();
+    assert_eq!(listed[0]["id"], "task#1", "{listed}");
+    assert_eq!(listed[0]["for"], "carol");
+    assert_eq!(
+        call(&carol, "task_done", json!({ "task": "task#1" })).status,
+        403
+    );
+
     // What the client asks of a repository, the server answers as the
     // person: everything this plugin was given for ada, reading for carol.
     let ask = |cookie: &str, repo: &str, method: &str, params: Value| {

@@ -46,11 +46,16 @@ export async function survey(repos, user, team) {
       try {
         // On one's own machine there is one repository, and it is not named.
         const named = team ? repo.name : null;
-        const [lanes, board] = await Promise.all([askIn(named, 'lanes'), askIn(named, 'board')]);
-        return { ...repo, lanes, board };
+        const [lanes, board, tasks] = await Promise.all([
+          askIn(named, 'lanes'),
+          askIn(named, 'board'),
+          // A Kito before 0.33 has no tasks: nothing waits there.
+          askIn(named, 'tasks').catch(() => []),
+        ]);
+        return { ...repo, lanes, board, tasks };
       } catch (error) {
         // One repository that cannot be asked does not hide the others.
-        return { ...repo, lanes: [], board: [], error: error.message };
+        return { ...repo, lanes: [], board: [], tasks: [], error: error.message };
       }
     }),
   );
@@ -61,6 +66,20 @@ export async function survey(repos, user, team) {
     for (const lane of repo.lanes) {
       const need = needOf(lane, user === null || lane.owner === user, repo.role);
       if (need) needs.push({ ...need, title: lane.task ?? lane.intent ?? lane.id, where: where(lane.id), href: link(lane.id) });
+    }
+    // Tasks (Kito 0.33): for this person, and those they asked for that may be closed.
+    const taskLink = (id) => `${team ? `?repo=${encodeURIComponent(repo.name)}` : ''}#/tasks?task=${encodeURIComponent(id)}`;
+    for (const task of repo.tasks ?? []) {
+      if (repo.role === 'read') continue;
+      const asked = user === null || task.by === user;
+      let need = null;
+      if (asked && (task.state === 'ready' || task.thinks_done)) {
+        const why = task.thinks_done ? `${task.thinks_done} thinks it is done` : 'its lanes are closed';
+        need = { tone: 'ok', kind: 'task', what: `${why}: close it, or reopen it` };
+      } else if (user !== null && task.for === user && task.state === 'open') {
+        need = { tone: 'warn', kind: 'task', what: `asked of you by ${task.by}` };
+      }
+      if (need) needs.push({ ...need, title: task.title, where: team ? `${repo.name} · ${task.id}` : task.id, href: taskLink(task.id) });
     }
     for (const lane of repo.board) {
       atWork.push({ agent: lane.agent, assistant: lane.assistant ?? null, where: where(lane.id), href: link(lane.id), state: lane.state, last: lane.last_change_ms ?? 0 });

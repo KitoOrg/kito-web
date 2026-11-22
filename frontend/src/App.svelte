@@ -12,6 +12,7 @@
   import Notes from './Notes.svelte';
   import People from './People.svelte';
   import Settings from './Settings.svelte';
+  import Tasks from './Tasks.svelte';
   import SignIn from './SignIn.svelte';
   import Why from './Why.svelte';
 
@@ -108,6 +109,7 @@
       return { name: 'why', target: decodeURIComponent(rest.join('/')), lane: asked.get('lane') };
     }
     if (['why', 'log', 'notes', 'admin', 'people', 'settings', 'instructions'].includes(name)) return { name };
+    if (name === 'tasks') return { name, task: asked.get('task') };
     return { name: 'lanes' };
   });
   // The part of the client a page belongs to.
@@ -122,6 +124,7 @@
   let mayManage = $derived(role === 'maintain' || Boolean(who?.admin));
   let parts = $derived([
     ['lanes', '#/', 'Lanes'],
+    ['tasks', '#/tasks', 'Tasks'],
     ['why', '#/why', 'Code and why'],
     ['log', '#/log', 'Log'],
     ['notes', '#/notes', 'Notes'],
@@ -226,6 +229,10 @@
     <!-- The files, and one of them read with its reasons. -->
     {#key `${page.target ?? ''} ${page.lane ?? ''}`}
       <Code file={page.target ?? null} lane={page.lane ?? null} />
+    {/key}
+  {:else if page.name === 'tasks'}
+    {#key `${repo} ${page.task}`}
+      <Tasks {role} user={who?.user ?? null} open={page.task} />
     {/key}
   {:else if page.name === 'instructions'}
     {#key repo}

@@ -8,7 +8,7 @@ Kito: it asks the repository's daemon what `kito` asks, through the
 daemon's API (version 1, `docs/api.md` in Kito), within the permissions
 the repository gives it. Nothing of Kito is linked into it.
 
-## What it does (0.12)
+## What it does (0.13)
 
 - **The lanes** of a repository, as a list: where each stands, whose it
   is, what it declared, which other lanes are on the same code. The
@@ -126,6 +126,14 @@ kito-server serve --http 0.0.0.0:7443     # https://<the server>:7443/
   `kito connect` line to pass on, or by who they are for a way to sign in
   that the server offers. Admins and owners are named by owners. A
   change counts at once, in the connections that are open.
+- **Tasks** (Kito 0.33): what needs doing, as a board by where each
+  stands (to do, in a lane, ready to close, done); a task with its text,
+  its lanes, whom it is for and what was said on it, which the agents in
+  its lanes are told. Whoever may write asks for tasks, comments, says
+  whom they are for, and closes them: dropping a card on "Done" closes
+  it, dragging it back reopens it. A lane's page links to its task, and
+  "Needs you" has the tasks asked of you and those you asked for that are
+  ready to close.
 - **Instructions** (Kito 0.32): what the assistants are told, each file
   with where it comes from (the kitchen, the repository, or the
   repository over the kitchen), and what Claude Code, Codex or ZCode
