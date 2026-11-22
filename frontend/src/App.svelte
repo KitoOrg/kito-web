@@ -2,6 +2,8 @@
   import { behindServer, info, me, signOut } from './api.js';
   import { survey } from './needs.js';
   import Admin from './Admin.svelte';
+  import Audit from './Audit.svelte';
+  import Backups from './Backups.svelte';
   import Board from './Board.svelte';
   import Code from './Code.svelte';
   import Home from './Home.svelte';
@@ -114,6 +116,7 @@
     if (name === 'tasks') return { name, task: asked.get('task') };
     if (name === 'search') return { name, q: asked.get('q') ?? '' };
     if (name === 'insights') return { name };
+    if (name === 'audit' || name === 'backups') return { name };
     return { name: 'lanes' };
   });
   // The part of the client a page belongs to.
@@ -175,7 +178,9 @@
     </a>
     {#if who.admin}
       <a class="link" href={`${home}#/people`} aria-current={!repo && page.name === 'people' ? 'page' : undefined}>People</a>
-      <a class="link" href="#/admin" aria-current={page.name === 'admin' ? 'page' : undefined}>Server plugins</a>
+      <a class="link" href="#/admin" aria-current={page.name === 'admin' ? 'page' : undefined}>Plugins</a>
+      <a class="link" href={`${home}#/audit`} aria-current={page.name === 'audit' ? 'page' : undefined}>Audit</a>
+      <a class="link" href={`${home}#/backups`} aria-current={page.name === 'backups' ? 'page' : undefined}>Backups</a>
     {/if}
     <span class="who" title="Signed in">{who.user}</span>
     <button class="out" onclick={leave}>Sign out</button>
@@ -212,6 +217,15 @@
       <div class="panel closed">
         <h1>For the server’s administrators</h1>
         <p class="soft">Whoever runs this server says who they are, on its machine.</p>
+      </div>
+    {/if}
+  {:else if about.team && ['audit', 'backups'].includes(page.name)}
+    {#if who.admin}
+      {#if page.name === 'audit'}<Audit />{:else}<Backups />{/if}
+    {:else}
+      <div class="panel closed">
+        <h1>For the server’s admins</h1>
+        <p class="soft">The audit log and the backups are for those who run this server.</p>
       </div>
     {/if}
   {:else if about.team && !repo && page.name === 'search'}

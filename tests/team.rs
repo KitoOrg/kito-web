@@ -521,6 +521,36 @@ fn a_kito_server_serves_it_to_whoever_signs_in() {
     let stats = call(&carol, "stats", json!({})).json();
     assert!(stats["flow"]["weeks"].is_array(), "{stats}");
 
+    // The audit log, for admins: what changed the server, and each request.
+    let audit = people(&ada, "server.audit", json!({})).json();
+    assert!(
+        audit
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| entry["kind"] == "user_added"),
+        "{audit}"
+    );
+    let asked = people(
+        &ada,
+        "server.audit",
+        json!({ "requests": true, "who": "carol" }),
+    )
+    .json();
+    assert!(
+        asked
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| entry["what"] == "stats"),
+        "{asked}"
+    );
+    assert_eq!(
+        people(&ada, "server.audit_verify", json!({})).json()["whole"],
+        true
+    );
+    assert_eq!(people(&carol, "server.audit", json!({})).status, 403);
+
     // What the client asks of a repository, the server answers as the
     // person: everything this plugin was given for ada, reading for carol.
     let ask = |cookie: &str, repo: &str, method: &str, params: Value| {
