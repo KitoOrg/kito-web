@@ -15,6 +15,7 @@
   import Logo from './Logo.svelte';
   import Notes from './Notes.svelte';
   import People from './People.svelte';
+  import Repositories from './Repositories.svelte';
   import Settings from './Settings.svelte';
   import Tasks from './Tasks.svelte';
   import SignIn from './SignIn.svelte';
@@ -116,7 +117,7 @@
     if (name === 'tasks') return { name, task: asked.get('task') };
     if (name === 'search') return { name, q: asked.get('q') ?? '' };
     if (name === 'insights') return { name };
-    if (name === 'audit' || name === 'backups') return { name };
+    if (name === 'audit' || name === 'backups' || name === 'repositories') return { name };
     return { name: 'lanes' };
   });
   // The part of the client a page belongs to.
@@ -178,6 +179,7 @@
     </a>
     {#if who.admin}
       <a class="link" href={`${home}#/people`} aria-current={!repo && page.name === 'people' ? 'page' : undefined}>People</a>
+      <a class="link" href={`${home}#/repositories`} aria-current={page.name === 'repositories' ? 'page' : undefined}>Repositories</a>
       <a class="link" href="#/admin" aria-current={page.name === 'admin' ? 'page' : undefined}>Plugins</a>
       <a class="link" href={`${home}#/audit`} aria-current={page.name === 'audit' ? 'page' : undefined}>Audit</a>
       <a class="link" href={`${home}#/backups`} aria-current={page.name === 'backups' ? 'page' : undefined}>Backups</a>
@@ -219,13 +221,13 @@
         <p class="soft">Whoever runs this server says who they are, on its machine.</p>
       </div>
     {/if}
-  {:else if about.team && ['audit', 'backups'].includes(page.name)}
+  {:else if about.team && ['audit', 'backups', 'repositories'].includes(page.name)}
     {#if who.admin}
-      {#if page.name === 'audit'}<Audit />{:else}<Backups />{/if}
+      {#if page.name === 'audit'}<Audit />{:else if page.name === 'backups'}<Backups />{:else}<Repositories owner={who.role === 'owner'} />{/if}
     {:else}
       <div class="panel closed">
         <h1>For the server’s admins</h1>
-        <p class="soft">The audit log and the backups are for those who run this server.</p>
+        <p class="soft">The repositories, the audit log and the backups are for those who run this server.</p>
       </div>
     {/if}
   {:else if about.team && !repo && page.name === 'search'}

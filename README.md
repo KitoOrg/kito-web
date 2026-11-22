@@ -8,7 +8,7 @@ Kito: it asks the repository's daemon what `kito` asks, through the
 daemon's API (version 1, `docs/api.md` in Kito), within the permissions
 the repository gives it. Nothing of Kito is linked into it.
 
-## What it does (0.15)
+## What it does (0.16)
 
 - **The lanes** of a repository, as a list: where each stands, whose it
   is, what it declared, which other lanes are on the same code. The
@@ -159,6 +159,10 @@ kito-server serve --http 0.0.0.0:7443     # https://<the server>:7443/
   changed the server and who did it, or each request, with whether the
   log's chain is whole; the backups here and in S3, one made now, one
   downloaded.
+- **Repositories**, for the server's admins (Kito 0.36): every one with
+  who has it and its size; add one, empty or from a git address (a
+  token used once); rename and archive; owners bring an archived one
+  back or delete it now.
 - **The server's plugins**, for its admins (`kito-server user role
   <name> admin`, on the server's machine): what is installed and what
   each was given, what the registry lists, and install, enable, disable
