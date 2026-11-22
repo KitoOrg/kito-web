@@ -24,10 +24,13 @@
   let about = $state(null);
   let failed = $state('');
   let route = $state(location.hash);
+  // On a phone, what does not fit the bar is behind a menu button.
+  let menu = $state(false);
 
   $effect(() => {
     const moved = () => {
       route = location.hash;
+      menu = false;
       scrollTo(0, 0);
     };
     addEventListener('hashchange', moved);
@@ -146,9 +149,9 @@
   <a class="logo" href={about?.team ? home : '#/'}><Logo /> Kito</a>
   {#if about?.team && who}
     <span class="crumb">
-      <a href={home}>{location.host}</a>
+      <a class="host" href={home}>{location.host}</a>
       {#if who.repos.length > 0}
-        <span class="slash">/</span>
+        <span class="slash host">/</span>
         <select aria-label="Repository" value={repo ?? ''} onchange={(event) => choose(event.currentTarget.value)}>
           <option value="">every repository</option>
           {#each who.repos as one}
@@ -161,6 +164,15 @@
     <span class="crumb" title={about.path}><b>{about.repository}</b></span>
   {/if}
   <span class="grow"></span>
+  {#if about?.team && who}
+    <a class="link needs" href={home} aria-current={!repo && page.name !== 'admin' ? 'page' : undefined}>
+      Needs you{#if seen?.needs.length > 0}<i>{seen.needs.length}</i>{/if}
+    </a>
+  {/if}
+  {#if about?.known || (about?.team && who)}
+    <button class="menu" aria-expanded={menu} aria-label="Menu" onclick={() => (menu = !menu)}>{menu ? '✕' : '☰'}</button>
+  {/if}
+  <div class="more" class:open={menu}>
   {#if about?.known || (about?.team && who)}
     <form
       class="find"
@@ -168,15 +180,13 @@
         event.preventDefault();
         const q = new FormData(event.currentTarget).get('q') ?? '';
         location.hash = `#/search?q=${encodeURIComponent(q)}`;
+        menu = false;
       }}
     >
       <input name="q" placeholder="Search what was done" aria-label="Search" />
     </form>
   {/if}
   {#if about?.team && who}
-    <a class="link" href={home} aria-current={!repo && page.name !== 'admin' ? 'page' : undefined}>
-      Needs you{#if seen?.needs.length > 0}<i>{seen.needs.length}</i>{/if}
-    </a>
     {#if who.admin}
       <a class="link" href={`${home}#/people`} aria-current={!repo && page.name === 'people' ? 'page' : undefined}>People</a>
       <a class="link" href={`${home}#/repositories`} aria-current={page.name === 'repositories' ? 'page' : undefined}>Repositories</a>
@@ -189,6 +199,7 @@
   {:else if about?.kito}
     <span class="version">Kito {about.kito} · web {about.version}</span>
   {/if}
+  </div>
 </header>
 
 {#if about?.known && page.name !== 'admin'}
@@ -354,6 +365,20 @@
   .grow {
     flex: 1;
   }
+  .more {
+    display: contents;
+  }
+  .menu {
+    display: none;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.08);
+    color: inherit;
+    border-radius: 6px;
+    width: 34px;
+    height: 32px;
+    font-size: 16px;
+    line-height: 1;
+  }
   .find input {
     font: inherit;
     font-size: 13px;
@@ -466,10 +491,77 @@
   .closed p {
     margin: 8px 0 0;
   }
-  @media (max-width: 640px) {
+  @media (max-width: 760px) {
     .top {
-      padding: 10px 14px;
+      padding: 8px 12px;
+      gap: 8px;
+      flex-wrap: nowrap;
+      position: sticky;
+      top: 0;
+      z-index: 20;
     }
+    .logo {
+      font-size: 0;
+      gap: 0;
+    }
+    .host {
+      display: none;
+    }
+    .crumb {
+      min-width: 0;
+    }
+    select {
+      max-width: 46vw;
+      padding: 4px 6px;
+    }
+    .needs {
+      white-space: nowrap;
+      padding: 5px 8px;
+    }
+    .menu {
+      display: inline-grid;
+      place-items: center;
+      flex: none;
+    }
+    .more {
+      display: none;
+    }
+    .more.open {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 2px;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      padding: 10px 12px 14px;
+      background: var(--chrome);
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
+    }
+    .more.open .find input {
+      width: 100%;
+      padding: 8px 10px;
+      font-size: 15px;
+      margin-bottom: 6px;
+    }
+    .more.open .link {
+      font-size: 15px;
+      padding: 10px;
+    }
+    .more.open .who {
+      justify-self: start;
+      margin: 8px 0 0 10px;
+      width: max-content;
+    }
+    .more.open .out {
+      text-align: left;
+      font-size: 15px;
+      padding: 10px;
+    }
+  }
+  @media (max-width: 640px) {
     .tabs {
       padding: 0 8px;
     }
