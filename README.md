@@ -8,7 +8,7 @@ Kito: it asks the repository's daemon what `kito` asks, through the
 daemon's API (version 1, `docs/api.md` in Kito), within the permissions
 the repository gives it. Nothing of Kito is linked into it.
 
-## What it does (0.13)
+## What it does (0.14)
 
 - **The lanes** of a repository, as a list: where each stands, whose it
   is, what it declared, which other lanes are on the same code. The
@@ -126,6 +126,14 @@ kito-server serve --http 0.0.0.0:7443     # https://<the server>:7443/
   `kito connect` line to pass on, or by who they are for a way to sign in
   that the server offers. Admins and owners are named by owners. A
   change counts at once, in the connections that are open.
+- **Search** (Kito 0.34), from a box in the top bar: reasons and what
+  they changed, lanes, tasks, comments and notes, by words, kind, time,
+  who (a person, an agent, an assistant or a model), where and outcome;
+  in one repository, or in every one the person may use.
+- **Insights** (Kito 0.34): lanes week by week, how long they take, each
+  assistant and model (integrated, conflicts, refused or held edits,
+  failed checks), the busiest files and functions, review. Charts drawn
+  with Chart.js (MIT, in `licenses/`).
 - **Tasks** (Kito 0.33): what needs doing, as a board by where each
   stands (to do, in a lane, ready to close, done); a task with its text,
   its lanes, whom it is for and what was said on it, which the agents in
@@ -184,7 +192,7 @@ Kito's mark is three lanes that come in and become one. The colours are
 indigo on a cool paper, light and dark; green, amber, red and slate say
 where a lane stands, and are not the brand's. The typeface is
 [Geist](https://vercel.com/font) and Geist Mono (Vercel, SIL Open Font
-License 1.1, in `licenses/`), carried with the client: a browser that
+License 1.1, in `licenses/`), and Chart.js (MIT, in `licenses/`), carried with the client: a browser that
 opens it asks nothing of anybody else.
 
 ## License

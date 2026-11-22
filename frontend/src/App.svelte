@@ -5,6 +5,8 @@
   import Board from './Board.svelte';
   import Code from './Code.svelte';
   import Home from './Home.svelte';
+  import Insights from './Insights.svelte';
+  import Search from './Search.svelte';
   import Instructions from './Instructions.svelte';
   import Lane from './Lane.svelte';
   import Log from './Log.svelte';
@@ -110,6 +112,8 @@
     }
     if (['why', 'log', 'notes', 'admin', 'people', 'settings', 'instructions'].includes(name)) return { name };
     if (name === 'tasks') return { name, task: asked.get('task') };
+    if (name === 'search') return { name, q: asked.get('q') ?? '' };
+    if (name === 'insights') return { name };
     return { name: 'lanes' };
   });
   // The part of the client a page belongs to.
@@ -128,6 +132,7 @@
     ['why', '#/why', 'Code and why'],
     ['log', '#/log', 'Log'],
     ['notes', '#/notes', 'Notes'],
+    ['insights', '#/insights', 'Insights'],
     ['instructions', '#/instructions', 'Instructions'],
     ...(about?.team && mayManage ? [['people', '#/people', 'People'], ['settings', '#/settings', 'Settings']] : []),
   ]);
@@ -152,6 +157,18 @@
     <span class="crumb" title={about.path}><b>{about.repository}</b></span>
   {/if}
   <span class="grow"></span>
+  {#if about?.known || (about?.team && who)}
+    <form
+      class="find"
+      onsubmit={(event) => {
+        event.preventDefault();
+        const q = new FormData(event.currentTarget).get('q') ?? '';
+        location.hash = `#/search?q=${encodeURIComponent(q)}`;
+      }}
+    >
+      <input name="q" placeholder="Search what was done" aria-label="Search" />
+    </form>
+  {/if}
   {#if about?.team && who}
     <a class="link" href={home} aria-current={!repo && page.name !== 'admin' ? 'page' : undefined}>
       Needs you{#if seen?.needs.length > 0}<i>{seen.needs.length}</i>{/if}
@@ -197,6 +214,12 @@
         <p class="soft">Whoever runs this server says who they are, on its machine.</p>
       </div>
     {/if}
+  {:else if about.team && !repo && page.name === 'search'}
+    {#key page.q}
+      <Search team={true} repos={who.repos} q={page.q} />
+    {/key}
+  {:else if about.team && !repo && page.name === 'insights'}
+    <Insights team={true} repos={who.repos} />
   {:else if about.team && !repo && page.name === 'people'}
     {#if who.admin}
       <People {who} />
@@ -229,6 +252,14 @@
     <!-- The files, and one of them read with its reasons. -->
     {#key `${page.target ?? ''} ${page.lane ?? ''}`}
       <Code file={page.target ?? null} lane={page.lane ?? null} />
+    {/key}
+  {:else if page.name === 'search'}
+    {#key page.q}
+      <Search {repo} team={Boolean(about.team)} q={page.q} />
+    {/key}
+  {:else if page.name === 'insights'}
+    {#key repo}
+      <Insights {repo} team={Boolean(about.team)} />
     {/key}
   {:else if page.name === 'tasks'}
     {#key `${repo} ${page.task}`}
@@ -306,6 +337,16 @@
   }
   .grow {
     flex: 1;
+  }
+  .find input {
+    font: inherit;
+    font-size: 13px;
+    color: inherit;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 6px;
+    padding: 3px 8px;
+    width: 150px;
   }
   .link {
     font-size: 13px;

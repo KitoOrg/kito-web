@@ -508,6 +508,19 @@ fn a_kito_server_serves_it_to_whoever_signs_in() {
         403
     );
 
+    // Search and numbers, for whoever may read.
+    let found = call(&carol, "search", json!({ "q": "cents" })).json();
+    assert!(
+        found
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|hit| hit["kind"] == "task"),
+        "{found}"
+    );
+    let stats = call(&carol, "stats", json!({})).json();
+    assert!(stats["flow"]["weeks"].is_array(), "{stats}");
+
     // What the client asks of a repository, the server answers as the
     // person: everything this plugin was given for ada, reading for carol.
     let ask = |cookie: &str, repo: &str, method: &str, params: Value| {
