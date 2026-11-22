@@ -149,6 +149,20 @@
       {#if plugin.serves_pages}
         <p class="faint">It serves these pages: it is disabled on the server’s machine, not from here.</p>
       {/if}
+      {#if plugin.name === 'github' && plugin.enabled}
+        <div class="actions">
+          <a class="button primary" href="/github/app/new">Create GitHub App</a>
+          <a class="button" href="/github/app/new?org=" onclick={(event) => {
+            const org = prompt('The GitHub organization the app belongs to');
+            if (!org) event.preventDefault();
+            else event.currentTarget.href = `/github/app/new?org=${encodeURIComponent(org.trim())}`;
+          }}>…for an organization</a>
+        </div>
+        <p class="faint">
+          GitHub makes the server’s app with its permissions and webhook; install it on repositories, then link each in its
+          Settings. Making it again replaces the one this server keeps.
+        </p>
+      {/if}
       {#if plugin.problem}<p class="error">{plugin.problem}</p>{/if}
       {#if plugin.last_failure}<p class="error">It last failed {plugin.last_failure}</p>{/if}
 

@@ -247,6 +247,28 @@ a.button:hover {
   text-decoration: none;
   background: var(--hover);
 }
+a.button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+a.button.primary:hover {
+  background: var(--accent-hover);
+}
+a.button.quiet {
+  border-color: transparent;
+  background: none;
+  color: var(--soft);
+}
+a.button.quiet:hover {
+  color: var(--ink);
+  background: var(--hover);
+}
+.hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--faint);
+}
 
 :where(input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color'])),
 :where(select) {

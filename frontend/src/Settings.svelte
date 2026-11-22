@@ -5,6 +5,7 @@
   import { ago, ask } from './api.js';
   import { toast } from './toast.svelte.js';
   import Loading from './Loading.svelte';
+  import GitHubSync from './GitHubSync.svelte';
 
   let { repo, who } = $props();
 
@@ -190,12 +191,16 @@
     {/if}
     {@render changes('kitchen')}
   </section>
-  {:else if now.kitchen}
+  {/if}
+  {#if who?.plugins?.includes('github')}
+    <GitHubSync {repo} {admin} />
+  {/if}
+  {#if !running('kitchen') && now.kitchen}
     <p class="faint">
       This repository names the kitchen <span class="mono">{shown(now.kitchen)}</span>, and the kitchen plugin does not
       run on this server: its instructions are not given.
     </p>
-  {:else if plugins.length > 0}
+  {:else if plugins.length > 0 && !plugins.includes('github') && !running('kitchen')}
     <p class="faint">None of them has settings for a repository.</p>
   {/if}
 {/if}
