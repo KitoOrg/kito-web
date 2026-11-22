@@ -3,6 +3,7 @@
   // lanes, tasks, comments, notes. In one repository, or behind a server
   // with none chosen, in every repository the person may use.
   import { ago, askIn, laneLink } from './api.js';
+  import Empty from './Empty.svelte';
 
   let { repo = null, repos = [], team = false, q: given = '' } = $props();
 
@@ -74,7 +75,7 @@
   const outcomesOf = (hit) => (Array.isArray(hit.outcome) ? hit.outcome : hit.outcome ? [hit.outcome] : []);
 </script>
 
-<h1>Search{repo ? ` in ${repo}` : team ? ' every repository' : ''}</h1>
+<div class="page-head"><div><h1>Search{repo ? ` in ${repo}` : team ? ' every repository' : ''}</h1></div></div>
 <form class="panel filters" onsubmit={search}>
   <input class="words" placeholder="words: prices cents" bind:value={q} />
   <select bind:value={kind}>{#each kinds as [value, label]}<option {value}>{label}</option>{/each}</select>
@@ -87,7 +88,11 @@
 {#if failed}<p class="error" role="alert">{failed}</p>{/if}
 
 {#if found !== null}
-  <p class="faint">{found.length} found</p>
+  <p class="faint count">{found.length} found</p>
+  {#if found.length === 0}
+    <Empty title="Nothing found.">Fewer words, or another kind or time, may find it.</Empty>
+  {:else}
+  <div class="panel hits">
   {#each found as hit}
     <div class="hit">
       <span class="chip kind">{hit.kind}</span>
@@ -102,9 +107,9 @@
         {#if hit.where?.length}<div class="mono small soft">{hit.where.slice(0, 6).join('  ')}{hit.where.length > 6 ? ' …' : ''}</div>{/if}
       </div>
     </div>
-  {:else}
-    <p class="soft">Nothing found.</p>
   {/each}
+  </div>
+  {/if}
 {/if}
 
 <style>
@@ -113,37 +118,39 @@
     flex-wrap: wrap;
     gap: 8px;
     padding: 12px;
-    margin: 12px 0;
+    margin: 0 0 16px;
   }
   .words {
     flex: 1 1 240px;
   }
-  input,
-  select {
-    font: inherit;
-    font-size: 13px;
-    color: var(--ink);
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 4px 8px;
+  .count {
+    margin: 0 0 8px;
+    font-size: 12.5px;
   }
   .hit {
     display: flex;
-    gap: 10px;
-    padding: 8px 0;
-    border-bottom: 1px solid var(--line);
+    gap: 12px;
+    padding: 12px 16px;
+    font-size: 13px;
+  }
+  .hit + .hit {
+    border-top: 1px solid var(--line);
   }
   .kind {
     min-width: 64px;
-    text-align: center;
+    justify-content: center;
     align-self: flex-start;
   }
   .body {
     display: grid;
     gap: 2px;
+    min-width: 0;
+  }
+  .body .chip {
+    margin-left: 6px;
   }
   .small {
     font-size: 12px;
+    overflow-wrap: anywhere;
   }
 </style>

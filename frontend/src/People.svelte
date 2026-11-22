@@ -4,6 +4,7 @@
   // everybody on the server, for its admins. The server decides who may
   // do what; this page only asks.
   import { ago, ask, laneLink, people, ways } from './api.js';
+  import Loading from './Loading.svelte';
 
   let { repo = null, who } = $props();
 
@@ -110,15 +111,19 @@
   const names = $derived((everyone ?? []).map((person) => person.user).filter((name) => !members?.some((m) => m.user === name)));
 </script>
 
-<h1>{repo ? `Who uses ${repo}` : 'People of this server'}</h1>
-<p class="soft">
-  {#if repo}
-    Each person has a role here, and nothing in the repositories they were not given. A change counts at once, in
-    the connections that are open.
-  {:else}
-    Each person is a member, an admin or an owner of the server, and has a role in each repository they were given.
-  {/if}
-</p>
+<div class="page-head">
+  <div>
+    <h1>{repo ? `Who uses ${repo}` : 'People of this server'}</h1>
+    <p class="lead">
+      {#if repo}
+        Each person has a role here, and nothing in the repositories they were not given. A change counts at once, in
+        the connections that are open.
+      {:else}
+        Each person is a member, an admin or an owner of the server, and has a role in each repository they were given.
+      {/if}
+    </p>
+  </div>
+</div>
 
 {#if failed}<p class="error" role="alert">{failed}</p>{/if}
 
@@ -128,16 +133,17 @@
       {#if invited.token}Their token is shown this once: pass it on now.{:else}They sign in with {invited.way}, and have no token.{/if}</p>
     <div class="line">
       <code class="mono">{invited.line}</code>
-      <button onclick={() => copy(invited.line)}>Copy</button>
+      <button class="sm" onclick={() => copy(invited.line)}>Copy</button>
     </div>
-    <button class="quiet" onclick={() => (invited = null)}>Done</button>
+    <button class="sm" onclick={() => (invited = null)}>Done</button>
   </div>
 {/if}
 
 {#if repo}
   {#if members === null && !failed}
-    <p class="soft">…</p>
+    <Loading />
   {:else if members}
+    <div class="panel table-wrap">
     <table class="people">
       <thead><tr><th>Person</th><th>Role</th><th>Last here</th><th>Open lanes</th><th></th></tr></thead>
       <tbody>
@@ -168,6 +174,7 @@
         {/each}
       </tbody>
     </table>
+    </div>
 
     <form class="panel row" onsubmit={addMember}>
       <strong>Give {repo} to</strong>
@@ -180,6 +187,7 @@
     </form>
   {/if}
 {:else if everyone}
+  <div class="panel table-wrap">
   <table class="people">
     <thead><tr><th>Person</th><th>On the server</th><th>Repositories</th><th>Last here</th><th></th></tr></thead>
     <tbody>
@@ -218,6 +226,7 @@
       {/each}
     </tbody>
   </table>
+  </div>
 {/if}
 
 {#if admin}
@@ -251,39 +260,12 @@
 {/if}
 
 <style>
-  select,
-  input {
-    font: inherit;
-    font-size: 13px;
-    color: var(--ink);
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 4px 8px;
-  }
-  select:disabled {
-    opacity: 0.6;
-  }
-  .people {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 12px 0;
-  }
-  .people th {
-    text-align: left;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--soft);
-    padding: 6px 8px;
-    border-bottom: 1px solid var(--line);
-  }
-  .people td {
-    padding: 8px;
-    border-bottom: 1px solid var(--line);
-    vertical-align: middle;
+  td select {
+    height: var(--control-sm);
   }
   .people td b {
     margin-right: 6px;
+    font-weight: 600;
   }
   .people .chip {
     margin: 0 4px 2px 0;
@@ -294,13 +276,19 @@
     gap: 8px;
     flex-wrap: wrap;
     padding: 12px 16px;
+    margin-top: 12px;
+    font-size: 13px;
+  }
+  .row strong {
+    font-weight: 600;
   }
   .invite {
     display: grid;
-    gap: 8px;
-    padding: 12px 16px;
-    margin-top: 16px;
-    max-width: 520px;
+    gap: 10px;
+    padding: 16px;
+    margin-top: 24px;
+    max-width: 560px;
+    font-size: 13px;
   }
   .invite h2 {
     margin: 0 0 4px;
@@ -310,21 +298,36 @@
     grid-template-columns: 140px 1fr;
     align-items: center;
     gap: 8px;
+    font-weight: 500;
+  }
+  @media (max-width: 520px) {
+    .invite label {
+      grid-template-columns: 1fr;
+      gap: 6px;
+    }
   }
   .said {
-    padding: 12px 16px;
-    margin: 12px 0;
+    display: grid;
+    gap: 8px;
+    justify-items: start;
+    padding: 14px 16px;
+    margin: 0 0 16px;
+    font-size: 13px;
+  }
+  .said p {
+    margin: 0;
   }
   .line {
     display: flex;
     gap: 8px;
     align-items: center;
-    margin: 8px 0;
+    width: 100%;
   }
   .line code {
     flex: 1;
     overflow-wrap: anywhere;
-    background: var(--sunk, rgba(0, 0, 0, 0.04));
+    background: var(--bg);
+    border: 1px solid var(--line);
     padding: 6px 8px;
     border-radius: 6px;
   }

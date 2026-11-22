@@ -2,11 +2,12 @@
   // The server's backups (Kito 0.35), for its admins: the schedule, the
   // archives here and in S3, one made now, one downloaded.
   import { people } from './api.js';
+  import { toast } from './toast.svelte.js';
+  import Loading from './Loading.svelte';
 
   let said = $state(null);
   let failed = $state('');
   let busy = $state(false);
-  let made = $state(null);
 
   async function load() {
     try {
@@ -22,7 +23,8 @@
     busy = true;
     failed = '';
     try {
-      made = await people('server.backup_now');
+      const made = await people('server.backup_now');
+      toast(`${made.name}: ${made.files} files, ${size(made.size)}`);
     } catch (error) {
       failed = error.message;
     }
@@ -43,20 +45,22 @@
   };
 </script>
 
-<div class="top">
-  <h1>Backups</h1>
-  <span class="grow"></span>
-  <button class="primary" disabled={busy} onclick={now}>{busy ? 'Making one…' : 'Back up now'}</button>
+<div class="page-head">
+  <div>
+    <h1>Backups</h1>
+    <p class="lead">
+      The whole server in one archive: every repository, the people, the settings. Compressed and encrypted with the
+      server's backup key, which <code>kito-server backup key</code> prints on its machine: a restore needs it.
+    </p>
+  </div>
+  <div class="actions">
+    <button class="primary" disabled={busy} onclick={now}>{busy ? 'Making one…' : 'Back up now'}</button>
+  </div>
 </div>
-<p class="soft">
-  The whole server in one archive: every repository, the people, the settings. Compressed and encrypted with the
-  server's backup key, which <code>kito-server backup key</code> prints on its machine: a restore needs it.
-</p>
 {#if failed}<p class="error" role="alert">{failed}</p>{/if}
-{#if made}<p class="chip ok" role="status">{made.name}: {made.files} files, {size(made.size)}</p>{/if}
 
 {#if said === null && !failed}
-  <p class="soft">…</p>
+  <Loading />
 {:else if said}
   <div class="panel facts">
     <div><span class="soft">When</span> {said.every_hours ? `every ${said.every_hours} hours, while the server serves` : 'only when asked'}</div>
@@ -64,6 +68,8 @@
     <div><span class="soft">Here</span> <span class="mono">{said.folder ?? 'nowhere: only in S3'}</span></div>
     <div><span class="soft">S3</span> <span class="mono">{said.s3 ?? 'not set up'}</span></div>
   </div>
+  <h2 class="section-title">Archives</h2>
+  <div class="panel table-wrap">
   <table class="list">
     <thead><tr><th>Made</th><th>Archive</th><th>Size</th><th>Kept</th><th></th></tr></thead>
     <tbody>
@@ -80,46 +86,29 @@
       {/each}
     </tbody>
   </table>
-  <p class="faint">
+  </div>
+  <p class="faint after">
     To put one back: <code>kito-server restore &lt;archive&gt; --to &lt;empty directory&gt; --key &lt;key file&gt;</code>,
     then serve from there.
   </p>
 {/if}
 
 <style>
-  .top {
-    display: flex;
-    align-items: center;
-  }
-  .grow {
-    flex: 1;
-  }
   .facts {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 8px;
-    padding: 12px 16px;
-    margin: 12px 0;
+    gap: 12px 16px;
+    padding: 14px 16px;
+    margin: 0;
+    font-size: 13px;
   }
   .facts .soft {
     display: block;
     font-size: 12px;
+    margin-bottom: 2px;
   }
-  .list {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13px;
-  }
-  .list th {
-    text-align: left;
-    color: var(--soft);
-    font-weight: 600;
-    font-size: 12px;
-    padding: 6px 8px;
-    border-bottom: 1px solid var(--line);
-  }
-  .list td {
-    padding: 6px 8px;
-    border-bottom: 1px solid var(--line);
+  .after {
+    margin: 12px 0 0;
+    font-size: 12.5px;
   }
 </style>

@@ -124,6 +124,9 @@
   section {
     padding: 14px 16px;
   }
+  h2 {
+    margin-bottom: 4px;
+  }
   .small {
     margin: 4px 0 0;
     font-size: 13px;

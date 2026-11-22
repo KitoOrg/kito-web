@@ -77,7 +77,7 @@
     ></textarea>
   {/if}
   <div class="row">
-    <button class="toggle" onclick={() => (open = !open)} aria-expanded={open}>
+    <button class="bare toggle" onclick={() => (open = !open)} aria-expanded={open}>
       <b>Your review</b>
       {#if drafts.length > 0}<span class="pending">{count(drafts.length, 'comment', 'comments')} waiting</span>{/if}
       <span class="caret">{open ? '▾' : '▴'}</span>
@@ -122,11 +122,11 @@
     bottom: 0;
     z-index: 10;
     margin-top: 16px;
-    padding: 10px 14px;
+    padding: 10px 16px;
     background: var(--panel);
     border: 1px solid var(--line);
-    border-radius: 10px 10px 0 0;
-    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.12);
+    border-radius: 8px 8px 0 0;
+    box-shadow: 0 -4px 16px rgba(16, 16, 32, 0.08);
   }
   textarea {
     width: 100%;
@@ -144,21 +144,21 @@
     display: inline-flex;
     gap: 8px;
     align-items: center;
-    border: 0;
-    background: none;
-    padding: 4px 0;
+    min-height: var(--control);
     color: var(--ink);
-    font: inherit;
-    font-size: 14px;
+    font-size: 13px;
     cursor: pointer;
   }
   .pending {
-    padding: 1px 8px;
+    display: inline-flex;
+    align-items: center;
+    height: 20px;
+    padding: 0 8px;
     border-radius: 999px;
-    background: var(--accent);
-    color: var(--accent-ink);
+    background: var(--accent-wash);
+    color: var(--accent);
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 500;
   }
   .caret {
     color: var(--faint);
@@ -183,14 +183,17 @@
   }
   .sep {
     width: 1px;
-    height: 22px;
+    height: 20px;
     background: var(--line);
     margin: 0 4px;
   }
   .go {
-    background: var(--good, #2f8f5b);
-    border-color: var(--good, #2f8f5b);
-    color: #fff;
+    background: var(--ok);
+    border-color: var(--ok);
+    color: var(--panel);
+  }
+  .go:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--ok) 88%, var(--ink));
   }
   .error {
     margin: 8px 0 0;

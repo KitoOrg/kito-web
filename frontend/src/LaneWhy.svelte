@@ -3,6 +3,8 @@
   // file it touched, the reasons before this one, who else is on it now,
   // and the notes left on it. What a reviewer would have to go and find.
   import { ago, ask, laneLink, whyLink } from './api.js';
+  import Empty from './Empty.svelte';
+  import Loading from './Loading.svelte';
 
   // `targets`: what the lane changed, as `{ target, kind, change }`.
   let { lane, id, targets } = $props();
@@ -38,7 +40,7 @@
 
 {#if failed}<p class="error">{failed}</p>{/if}
 {#if targets.length === 0}
-  <div class="panel empty soft">This lane has changed nothing yet.</div>
+  <Empty title="This lane has changed nothing yet." />
 {/if}
 {#each targets.slice(0, SHOWN) as one (one.target)}
   {@const graph = graphs[one.target]}
@@ -49,7 +51,7 @@
       <span class="faint">{one.change}</span>
     </header>
     {#if !graph}
-      <p class="soft pad">…</p>
+      <Loading lines={2} inset />
     {:else if graph.error}
       <p class="soft pad">{graph.error}</p>
     {:else}
@@ -116,7 +118,7 @@
     flex-wrap: wrap;
     padding-left: 10px;
     border-left: 3px solid var(--line);
-    font-size: 14px;
+    font-size: 13px;
   }
   .reasons li.own {
     border-color: var(--accent);
@@ -131,11 +133,8 @@
     margin: 0;
     padding: 8px 14px;
     border-top: 1px solid var(--line);
-    font-size: 14px;
+    font-size: 13px;
     overflow-wrap: anywhere;
-  }
-  .empty {
-    padding: 20px;
   }
   .more {
     margin: 10px 2px 0;

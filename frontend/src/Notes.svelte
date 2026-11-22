@@ -1,6 +1,8 @@
 <script>
   // Every note left on code: what there is to know that no change says.
   import { ask, ago, whyLink } from './api.js';
+  import Empty from './Empty.svelte';
+  import Loading from './Loading.svelte';
 
   let notes = $state(null);
   let failed = $state('');
@@ -39,18 +41,22 @@
   const link = (target) => (target.endsWith('/') ? null : whyLink(target));
 </script>
 
-<h1>Notes</h1>
-<p class="soft lead">
-  What whoever changes some code must know, and no change of the code says. A note is told with the why of that code,
-  and to an agent before it changes it.
-</p>
+<div class="page-head">
+  <div>
+    <h1>Notes</h1>
+    <p class="lead">
+      What whoever changes some code must know, and no change of the code says. A note is told with the why of that code,
+      and to an agent before it changes it.
+    </p>
+  </div>
+</div>
 
 {#if failed}<p class="error">{failed}</p>{/if}
 
 {#if notes === null && !failed}
-  <p class="soft">…</p>
+  <Loading />
 {:else if notes?.length === 0}
-  <div class="panel empty soft">No note is left on this repository's code.</div>
+  <div class="gap"><Empty title="No note is left on this repository's code.">Leave one below: it is told to whoever changes that code.</Empty></div>
 {:else}
   <ul>
     {#each notes ?? [] as note (note.id)}
@@ -62,7 +68,7 @@
         <p class="text">{note.text}</p>
         <p class="soft small">
           {note.id} · {note.by}{#if note.for}, of {note.for}{/if} · {ago(note.at_ms)}
-          <button class="quiet" disabled={busy} onclick={() => remove(note.id)}>Remove</button>
+          <button class="quiet sm" disabled={busy} onclick={() => remove(note.id)}>Remove</button>
         </p>
       </li>
     {/each}
@@ -78,6 +84,7 @@
 >
   <h2>Leave a note</h2>
   <input
+    class="mono"
     bind:value={on}
     placeholder="On what: src/billing.ts:invoice, src/billing.ts, src/billing/ or src/billing.ts:12"
     aria-label="What the note is on"
@@ -88,19 +95,16 @@
 </form>
 
 <style>
-  .lead {
-    margin: 4px 0 20px;
-    max-width: 720px;
-  }
   ul {
     list-style: none;
-    margin: 0 0 20px;
+    margin: 0 0 24px;
     padding: 0;
     display: grid;
     gap: 8px;
   }
   li {
     padding: 12px 16px;
+    font-size: 13px;
   }
   p {
     margin: 0;
@@ -109,35 +113,27 @@
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    align-items: baseline;
+    align-items: center;
   }
   .text {
     margin: 4px 0;
+    font-size: 14px;
     overflow-wrap: anywhere;
   }
   .small {
-    font-size: 13px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    font-size: 12.5px;
   }
-  .empty {
-    padding: 20px;
-    margin-bottom: 20px;
+  .gap {
+    margin-bottom: 24px;
   }
   .new {
-    padding: 14px 16px;
+    padding: 16px;
     display: grid;
-    gap: 8px;
+    gap: 10px;
     max-width: 720px;
-  }
-  input {
-    padding: 7px 10px;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    background: var(--panel);
-    color: var(--ink);
-    font: 13px var(--mono);
-  }
-  input:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
   }
 </style>

@@ -2,6 +2,8 @@
   // What was recorded on the main lane, newest first: checkpoints, and
   // the changes each holds.
   import { ask, ago, watch, whyLink } from './api.js';
+  import Empty from './Empty.svelte';
+  import Loading from './Loading.svelte';
 
   let entries = $state(null);
   let failed = $state('');
@@ -42,15 +44,19 @@
   const target = (op) => (op.symbol && op.path ? `${op.path}:${op.symbol}` : op.path);
 </script>
 
-<h1>Log</h1>
-<p class="soft lead">What is on the main lane, newest first: each checkpoint, and the changes it holds.</p>
+<div class="page-head">
+  <div>
+    <h1>Log</h1>
+    <p class="lead">What is on the main lane, newest first: each checkpoint, and the changes it holds.</p>
+  </div>
+</div>
 
 {#if failed}
   <p class="error">{failed}</p>
 {:else if entries === null}
-  <p class="soft">…</p>
+  <Loading lines={5} />
 {:else if groups.length === 0}
-  <div class="panel empty soft">Nothing is recorded yet.</div>
+  <Empty title="Nothing is recorded yet.">Each checkpoint of the main lane, and what it holds, shows here.</Empty>
 {:else}
   {#each groups as group}
     <section class="panel">
@@ -91,9 +97,6 @@
 {/if}
 
 <style>
-  .lead {
-    margin: 4px 0 20px;
-  }
   section {
     margin-bottom: 12px;
     overflow: hidden;
@@ -103,7 +106,8 @@
     flex-wrap: wrap;
     align-items: baseline;
     gap: 10px;
-    padding: 10px 14px;
+    padding: 10px 16px;
+    font-size: 13px;
   }
   .id {
     color: var(--soft);
@@ -111,11 +115,11 @@
   ul {
     list-style: none;
     margin: 0;
-    padding: 6px 14px 10px;
+    padding: 8px 16px 12px;
     border-top: 1px solid var(--line);
     display: grid;
-    gap: 3px;
-    font-size: 14px;
+    gap: 4px;
+    font-size: 13px;
   }
   li {
     display: flex;
@@ -144,8 +148,5 @@
     color: var(--removed-ink);
     font-family: var(--mono);
     font-size: 12px;
-  }
-  .empty {
-    padding: 20px;
   }
 </style>

@@ -3,6 +3,7 @@
   // server and who did it, or each request; and whether the chain of the
   // log is whole.
   import { ago, people } from './api.js';
+  import Loading from './Loading.svelte';
 
   let requests = $state(false);
   let who = $state('');
@@ -38,9 +39,15 @@
   verify();
 </script>
 
-<div class="top">
-  <h1>Audit log</h1>
-  <span class="grow"></span>
+<div class="page-head">
+  <div>
+    <h1>Audit log</h1>
+    <p class="lead">
+      What changed the server and who did it, kept forever; each request, kept 90 days. Every line is chained to the one
+      before it, so a line taken out or changed is found.
+    </p>
+  </div>
+  <div class="actions">
   {#if whole}
     {#if whole.whole}
       <span class="chip ok" title="Each line carries the hash of the one before">whole · {whole.lines} lines</span>
@@ -48,15 +55,12 @@
       <span class="chip bad" title={whole.why}>NOT whole: {whole.why}</span>
     {/if}
   {/if}
-  <button class="quiet" onclick={verify}>Check again</button>
+  <button onclick={verify}>Check again</button>
+  </div>
 </div>
-<p class="soft">
-  What changed the server and who did it, kept forever; each request, kept 90 days. Every line is chained to the one
-  before it, so a line taken out or changed is found.
-</p>
 
 <form class="panel filters" onsubmit={load}>
-  <label><input type="checkbox" bind:checked={requests} onchange={() => load()} /> each request</label>
+  <label class="check"><input type="checkbox" bind:checked={requests} onchange={() => load()} /> each request</label>
   <input placeholder="who" bind:value={who} />
   <input placeholder="what kind: role_changed, signed_in…" bind:value={kind} />
   <input placeholder="repository" bind:value={repo} />
@@ -71,8 +75,9 @@
 {#if failed}<p class="error" role="alert">{failed}</p>{/if}
 
 {#if entries === null && !failed}
-  <p class="soft">…</p>
+  <Loading lines={6} />
 {:else if entries}
+  <div class="panel table-wrap">
   <table class="log">
     <thead><tr><th>When</th><th>Who</th><th>What</th><th></th><th>Repository</th></tr></thead>
     <tbody>
@@ -89,49 +94,23 @@
       {/each}
     </tbody>
   </table>
+  </div>
 {/if}
 
 <style>
-  .top,
   .filters {
     display: flex;
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
-  }
-  .grow {
-    flex: 1;
-  }
-  .filters {
     padding: 12px;
-    margin: 12px 0;
+    margin: 0 0 16px;
   }
-  input:not([type='checkbox']),
-  select {
-    font: inherit;
-    font-size: 13px;
-    color: var(--ink);
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 4px 8px;
+  .filters .check {
+    margin-right: 4px;
   }
-  .log {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13px;
-  }
-  .log th {
-    text-align: left;
-    color: var(--soft);
+  .log td b {
     font-weight: 600;
-    font-size: 12px;
-    padding: 6px 8px;
-    border-bottom: 1px solid var(--line);
-  }
-  .log td {
-    padding: 6px 8px;
-    border-bottom: 1px solid var(--line);
   }
   .refused td {
     color: var(--bad);

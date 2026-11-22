@@ -3,6 +3,7 @@
   // reasons, which lines each wrote, who uses it, who is on it now, and
   // the notes left on it.
   import { ask, ago, fileText, focus, laneLink, whyLink } from './api.js';
+  import Loading from './Loading.svelte';
 
   let { target, lane = null } = $props();
 
@@ -68,7 +69,7 @@
 {#if failed && graph === null}
   <p class="error">{failed}</p>
 {:else if graph === null}
-  <p class="soft">…</p>
+  <Loading lines={4} />
 {:else}
   <div class="top">
     <h1 class="mono">{name}</h1>
@@ -92,7 +93,7 @@
           {#each graph.reasons as reason, index}
             <li class:picked={picked === index}>
               <button
-                class="swatch"
+                class="bare swatch"
                 style={`background:${tint(index)};border-color:${edge(index)}`}
                 title="Point out the lines it wrote"
                 aria-label={`Point out the lines written for: ${reason.why}`}
@@ -157,7 +158,7 @@
             <p>{said.text}</p>
             <p class="soft small">
               {said.by}{#if said.for}, of {said.for}{/if} · on <span class="mono">{said.on}</span> · {ago(said.at_ms)}
-              <button class="quiet" disabled={busy} onclick={() => remove(said.id)}>Remove</button>
+              <button class="quiet sm" disabled={busy} onclick={() => remove(said.id)}>Remove</button>
             </p>
           </article>
         {:else}
@@ -177,12 +178,12 @@
               use:focus
             ></textarea>
             <div class="actions">
-              <button class="primary" disabled={busy || note.trim().length < 3}>Leave the note</button>
-              <button type="button" onclick={() => (noting = false)}>Cancel</button>
+              <button class="primary sm" disabled={busy || note.trim().length < 3}>Leave the note</button>
+              <button class="sm" type="button" onclick={() => (noting = false)}>Cancel</button>
             </div>
           </form>
         {:else}
-          <div class="actions"><button onclick={() => (noting = true)}>Leave a note</button></div>
+          <div class="actions"><button class="sm" onclick={() => (noting = true)}>Leave a note</button></div>
         {/if}
         {#if noteFailed}<p class="error">{noteFailed}</p>{/if}
       </section>
@@ -235,7 +236,7 @@
 <style>
   .back {
     margin: 0 0 12px;
-    font-size: 14px;
+    font-size: 13px;
   }
   .top {
     margin-bottom: 16px;
@@ -246,7 +247,7 @@
   }
   .meta {
     margin: 4px 0 0;
-    font-size: 14px;
+    font-size: 13px;
   }
   .columns {
     display: grid;
@@ -287,10 +288,16 @@
   .swatch {
     width: 28px;
     height: 28px;
+    display: grid;
+    place-items: center;
     padding: 0;
+    border: 1px solid;
     border-radius: 6px;
+    color: var(--ink);
     font-family: var(--mono);
-    font-size: 13px;
+    font-size: 12px;
+    text-align: center;
+    cursor: pointer;
   }
   li.picked .swatch {
     outline: 2px solid var(--accent);
@@ -298,7 +305,7 @@
   }
   .why {
     margin: 0;
-    font-weight: 600;
+    font-weight: 500;
     overflow-wrap: anywhere;
   }
   .small {

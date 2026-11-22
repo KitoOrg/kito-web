@@ -1,12 +1,16 @@
 :root {
-  --bg: #f6f6fa;
+  --bg: #f7f7f9;
   --panel: #ffffff;
   --ink: #1b1b24;
   --soft: #5d5c6b;
-  --faint: #807f90;
-  --line: #e1e0ea;
+  --faint: #858494;
+  --line: #e4e3ec;
+  --line-strong: #cfcedb;
+  --hover: #f1f1f5;
   --accent: #4a41c4;
   --accent-ink: #ffffff;
+  --accent-hover: #3f37ad;
+  --accent-wash: rgba(74, 65, 196, 0.08);
   --added: #e4f3e3;
   --added-ink: #1c5a23;
   --removed: #fbe6e3;
@@ -15,28 +19,41 @@
   --warn-bg: #fbf0d4;
   --ok: #1c6b2a;
   --ok-bg: #e2f2e2;
-  --bad: #9b2a20;
+  --bad: #b0281c;
   --bad-bg: #fbe6e3;
   --done: #4d5878;
-  --done-bg: #e4e8f3;
+  --done-bg: #e8ebf3;
   --chrome: #1c1b33;
   --chrome-ink: #f0effa;
   --on-chrome: #aaa5f7;
   --mono: 'Geist Mono Variable', ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace;
   --sans: 'Geist Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* The one size of everything that is pressed or typed into. */
+  --control: 32px;
+  --control-sm: 28px;
+  --radius: 6px;
+  --radius-panel: 8px;
+  --pad-x: 12px;
+  --ring: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent);
+  --menu-shadow: 0 8px 24px rgba(16, 16, 32, 0.14), 0 1px 3px rgba(16, 16, 32, 0.08);
   color-scheme: light dark;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #15151c;
-    --panel: #1d1d26;
+    --panel: #1c1c25;
     --ink: #eaeaf2;
     --soft: #a6a5b5;
     --faint: #7c7b8c;
-    --line: #2f2e3b;
+    --line: #2c2b38;
+    --line-strong: #3d3c4c;
+    --hover: #24242f;
     --accent: #a5a0f5;
     --accent-ink: #14122e;
+    --accent-hover: #b8b4f8;
+    --accent-wash: rgba(165, 160, 245, 0.1);
     --added: #17301b;
     --added-ink: #a6dfab;
     --removed: #3a1c1a;
@@ -51,6 +68,7 @@
     --done-bg: #262b3b;
     --chrome: #0e0d1a;
     --chrome-ink: #eaeaf2;
+    --menu-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);
   }
 }
 
@@ -62,7 +80,10 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font: 15px/1.5 var(--sans);
+  font: 14px/1.5 var(--sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 a {
@@ -73,19 +94,19 @@ a:hover {
   text-decoration: underline;
 }
 
+/* Headings: a page title, and one kind of section title. */
 h1,
 h2,
 h3 {
   margin: 0;
   font-weight: 600;
-  line-height: 1.25;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
 }
 h1 {
-  font-size: 22px;
+  font-size: 20px;
 }
-h2 {
-  font-size: 16px;
-}
+h2,
 h3 {
   font-size: 14px;
 }
@@ -93,59 +114,268 @@ h3 {
 code,
 .mono {
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 12.5px;
 }
 
-button {
-  font: inherit;
-  padding: 5px 12px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
+/* ---- Page header: a title, one line on what the page is, its actions. */
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 20px;
+}
+.page-head > :first-child {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.page-head h1 {
+  overflow-wrap: anywhere;
+}
+.page-head .lead,
+.lead {
+  margin: 4px 0 0;
+  color: var(--soft);
+  font-size: 13px;
+  max-width: 760px;
+}
+.page-head .actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* A section of a page: its title, and what follows. */
+.section-title {
+  margin: 28px 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.section-title:first-child {
+  margin-top: 0;
+}
+
+/* ---- Controls: one height, one radius, one size of text. */
+:where(button) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--control);
+  padding: 0 var(--pad-x);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
   background: var(--panel);
   color: var(--ink);
+  font: 500 13px/1.2 var(--sans);
+  white-space: nowrap;
   cursor: pointer;
+  transition:
+    background-color 0.12s,
+    border-color 0.12s,
+    color 0.12s;
 }
-button:hover:not(:disabled) {
-  border-color: var(--faint);
+:where(button:not(.bare):hover:not(:disabled)) {
+  background: var(--hover);
 }
-button:disabled {
+:where(button):disabled {
   opacity: 0.5;
   cursor: default;
+}
+button.sm {
+  min-height: var(--control-sm);
+  padding: 0 10px;
+  font-size: 12.5px;
 }
 button.primary {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-ink);
 }
+button.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
 button.quiet {
   border-color: transparent;
-  background: none;
-  color: var(--accent);
-  padding: 2px 6px;
+  background: transparent;
+  color: var(--soft);
+  padding: 0 8px;
 }
+button.quiet:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--ink);
+}
+button.danger {
+  color: var(--bad);
+}
+button.danger:hover:not(:disabled) {
+  background: var(--bad-bg);
+  border-color: color-mix(in srgb, var(--bad) 40%, transparent);
+}
+button.quiet.danger {
+  color: var(--bad);
+}
+/* A button that is a row, a card, a line of code: none of the above. */
+button.bare {
+  display: revert;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  font: inherit;
+  white-space: normal;
+  text-align: left;
+}
+a.button {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control);
+  padding: 0 var(--pad-x);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+}
+a.button:hover {
+  text-decoration: none;
+  background: var(--hover);
+}
+
+:where(input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color'])),
+:where(select) {
+  height: var(--control);
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--ink);
+  font: 13px/1.2 var(--sans);
+  min-width: 0;
+}
+:where(select) {
+  padding-right: 8px;
+}
+:where(textarea) {
+  display: block;
+  width: 100%;
+  min-height: 72px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--ink);
+  font: 13px/1.5 var(--sans);
+  resize: vertical;
+}
+:where(input, select, textarea)::placeholder {
+  color: var(--faint);
+}
+:where(input, select, textarea):focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+}
+:where(input, select, textarea):disabled {
+  opacity: 0.6;
+}
+input.sm,
+select.sm {
+  height: var(--control-sm);
+  font-size: 12.5px;
+}
+input[type='checkbox'],
+input[type='radio'] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
+  flex: none;
+  vertical-align: -2px;
+}
+/* A checkbox and its words, side by side. */
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+}
+/* A labelled field: its name above it. */
+.field {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.field .hint {
+  font-weight: 400;
+  color: var(--soft);
+  font-size: 12px;
+}
+/* Fields and buttons on one line. */
+.controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 button:focus-visible,
-textarea:focus-visible,
 a:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-textarea {
-  width: 100%;
-  min-height: 64px;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
+/* Choose one of a few: a segmented control. */
+.seg {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+.seg button {
+  min-height: calc(var(--control) - 6px);
+  padding: 0 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--soft);
+}
+.seg button:hover:not(:disabled) {
+  background: transparent;
+  color: var(--ink);
+}
+.seg button[aria-pressed='true'] {
   background: var(--panel);
   color: var(--ink);
-  font: inherit;
-  resize: vertical;
+  box-shadow: 0 1px 2px rgba(16, 16, 32, 0.12);
+}
+.seg button b {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
+/* ---- Surfaces. */
 .panel {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-panel);
+}
+.panel > .panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
 }
 
 .soft {
@@ -155,14 +385,61 @@ textarea {
   color: var(--faint);
 }
 
+/* ---- Tables: one style. */
+.table-wrap {
+  overflow-x: auto;
+}
+:where(main) table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+:where(main) th {
+  height: 36px;
+  padding: 0 12px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--soft);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+:where(main) td {
+  height: 40px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+:where(main) tbody tr:last-child td {
+  border-bottom: 0;
+}
+:where(main) tbody tr:hover td {
+  background: var(--hover);
+}
+
+/* ---- Chips: one size, a few tones. */
 .chip {
-  display: inline-block;
-  padding: 1px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 8px;
   border-radius: 999px;
   border: 1px solid var(--line);
+  background: var(--panel);
   font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
   color: var(--soft);
   white-space: nowrap;
+  vertical-align: middle;
+}
+p.chip {
+  margin: 0;
+}
+a.chip:hover {
+  text-decoration: none;
+  border-color: var(--line-strong);
 }
 .chip.ok {
   background: var(--ok-bg);
@@ -179,17 +456,23 @@ textarea {
   color: var(--bad);
   border-color: transparent;
 }
-.chip.done {
+.chip.done,
+.chip.neutral {
   background: var(--done-bg);
   color: var(--done);
+  border-color: transparent;
+}
+.chip.accent {
+  background: var(--accent-wash);
+  color: var(--accent);
   border-color: transparent;
 }
 
 /* Where a lane stands, at the start of its row: open, waiting, stopped, done. */
 .ring {
-  width: 18px;
-  height: 18px;
-  margin-top: 3px;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
   border: 2px solid var(--ok);
   border-radius: 50%;
   flex: none;
@@ -216,14 +499,29 @@ textarea {
 }
 
 .error {
-  padding: 10px 14px;
-  border-radius: 8px;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--bad) 25%, transparent);
+  border-radius: var(--radius);
   background: var(--bad-bg);
   color: var(--bad);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+/* Something to know, that stays: a warning on the page. */
+.notice {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--warn) 25%, transparent);
+  border-radius: var(--radius);
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
-/* Phones: a wide table scrolls on its own, and nothing pushes the page
-   wider than the screen. */
+/* Phones: a wide table scrolls on its own, nothing pushes the page wider
+   than the screen, and what is pressed is big enough for a thumb. */
 @media (max-width: 760px) {
   main table {
     display: block;
@@ -241,9 +539,16 @@ textarea {
     max-width: 100%;
     min-width: 0;
   }
-  main button,
-  main select,
-  main input:not([type='checkbox']):not([type='radio']) {
-    min-height: 36px;
+}
+@media (max-width: 640px) {
+  :root {
+    --control: 36px;
+    --control-sm: 32px;
+  }
+  :where(input:not([type='checkbox'], [type='radio'])),
+  :where(select),
+  :where(textarea) {
+    /* Phones zoom into anything smaller. */
+    font-size: 16px;
   }
 }

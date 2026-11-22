@@ -3,6 +3,7 @@
   // assistant and model, where the code is busy, how review goes. Behind
   // a server with no repository chosen, every repository side by side.
   import { askIn } from './api.js';
+  import Loading from './Loading.svelte';
   import {
     BarController,
     BarElement,
@@ -135,16 +136,15 @@
   };
 </script>
 
-<div class="top">
-  <h1>Insights{repo ? ` · ${repo}` : team ? ' · every repository' : ''}</h1>
-  <span class="grow"></span>
-  <select bind:value={days}>{#each spans as [value, label]}<option {value}>{label}</option>{/each}</select>
+<div class="page-head">
+  <div><h1>Insights{repo ? ` · ${repo}` : team ? ' · every repository' : ''}</h1></div>
+  <select aria-label="Time" bind:value={days}>{#each spans as [value, label]}<option {value}>{label}</option>{/each}</select>
 </div>
 {#if failed}<p class="error" role="alert">{failed}</p>{/if}
-{#if all === null && !failed}<p class="soft">…</p>{/if}
+{#if all === null && !failed}<Loading lines={4} />{/if}
 
 {#each all ?? [] as { name, stats } (name)}
-  {#if team && !repo}<h2 class="repo">{name}</h2>{/if}
+  {#if team && !repo}<h2 class="section-title repo mono">{name}</h2>{/if}
   <div class="figures">
     <div class="panel figure"><b>{stats.flow.weeks.reduce((sum, one) => sum + one.opened, 0)}</b><span>lanes opened</span></div>
     <div class="panel figure"><b>{stats.flow.weeks.reduce((sum, one) => sum + one.integrated, 0)}</b><span>integrated</span></div>
@@ -201,76 +201,61 @@
 {/each}
 
 <style>
-  .top {
-    display: flex;
-    align-items: center;
-  }
-  .grow {
-    flex: 1;
-  }
   .repo {
-    margin-top: 24px;
+    font-size: 13px;
   }
   .figures {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 8px;
-    margin: 12px 0;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin: 0 0 12px;
   }
   .figure {
-    padding: 10px 12px;
     display: grid;
+    gap: 2px;
+    padding: 14px 16px;
   }
   .figure b {
+    order: 2;
     font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
   }
   .figure span {
+    order: 1;
     font-size: 12px;
     color: var(--soft);
   }
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
     gap: 12px;
+    margin-top: 12px;
   }
   .box {
-    padding: 12px 16px;
+    padding: 14px 16px;
+    min-width: 0;
   }
   .box h3 {
-    margin: 0 0 8px;
-    font-size: 14px;
+    margin: 0 0 12px;
+  }
+  .box p {
+    margin: 0;
+    font-size: 13px;
   }
   .canvas {
     position: relative;
     height: 220px;
   }
   table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 8px;
-    font-size: 13px;
+    margin-top: 12px;
   }
   th,
   td {
-    text-align: left;
-    padding: 4px 6px;
-    border-bottom: 1px solid var(--line);
-  }
-  th {
-    color: var(--soft);
-    font-weight: 600;
-    font-size: 12px;
+    padding-inline: 8px;
   }
   .small {
     font-size: 12px;
-  }
-  select {
-    font: inherit;
-    font-size: 13px;
-    color: var(--ink);
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 4px 8px;
   }
 </style>

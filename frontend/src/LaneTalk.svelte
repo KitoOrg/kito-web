@@ -88,7 +88,7 @@
 {/if}
 
 
-<label class="soft toggle">
+<label class="check soft toggle">
   <input type="checkbox" bind:checked={resolved} /> Show resolved comments
 </label>
 
@@ -134,7 +134,8 @@
     box-sizing: content-box;
   }
   .card {
-    padding: 10px 14px;
+    padding: 12px 16px;
+    font-size: 13px;
   }
   .who {
     margin: 0 0 4px;
@@ -172,9 +173,7 @@
     overflow-x: auto;
   }
   .toggle {
-    font-size: 13px;
-    display: flex;
-    gap: 6px;
-    align-items: center;
+    margin-top: 4px;
+    color: var(--soft);
   }
 </style>

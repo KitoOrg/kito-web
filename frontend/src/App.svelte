@@ -19,6 +19,8 @@
   import Settings from './Settings.svelte';
   import Tasks from './Tasks.svelte';
   import SignIn from './SignIn.svelte';
+  import Loading from './Loading.svelte';
+  import Toasts from './Toasts.svelte';
   import Why from './Why.svelte';
 
   let about = $state(null);
@@ -176,12 +178,12 @@
   {/if}
   <span class="grow"></span>
   {#if about?.team && who}
-    <a class="link needs" href={home} aria-current={!repo && page.name !== 'admin' ? 'page' : undefined}>
+    <a class="link needs" href={home} aria-current={!repo && page.name === 'lanes' ? 'page' : undefined}>
       Needs you{#if seen?.needs.length > 0}<i>{seen.needs.length}</i>{/if}
     </a>
   {/if}
   {#if about?.known || (about?.team && who)}
-    <button class="menu" aria-expanded={menu} aria-label="Menu" onclick={() => (menu = !menu)}>{menu ? '✕' : '☰'}</button>
+    <button class="bare menu"aria-expanded={menu} aria-label="Menu" onclick={() => (menu = !menu)}>{menu ? '✕' : '☰'}</button>
   {/if}
   <div class="more" class:open={menu}>
   {#if about?.known || (about?.team && who)}
@@ -202,7 +204,7 @@
       {@const serverPage = ['people', 'repositories', 'admin', 'audit', 'backups'].includes(page.name) && !(page.name === 'people' && repo)}
       <div class="dropper">
         <button
-          class="link toggle"
+          class="bare link toggle"
           aria-expanded={drop === 'server'}
           aria-current={serverPage ? 'page' : undefined}
           onclick={() => (drop = drop === 'server' ? '' : 'server')}>Server <span class="caret">▾</span></button
@@ -217,12 +219,12 @@
       </div>
     {/if}
     <div class="dropper">
-      <button class="who" title="Signed in" aria-expanded={drop === 'me'} onclick={() => (drop = drop === 'me' ? '' : 'me')}
+      <button class="bare who"title="Signed in" aria-expanded={drop === 'me'} onclick={() => (drop = drop === 'me' ? '' : 'me')}
         >{who.user}</button
       >
       <div class="drop right" class:shown={drop === 'me'}>
         <span class="faint">Signed in as <b>{who.user}</b>{who.role ? ` · ${who.role}` : ''}</span>
-        <button class="out" onclick={leave}>Sign out</button>
+        <button class="bare out"onclick={leave}>Sign out</button>
       </div>
     </div>
   {:else if about?.kito}
@@ -248,7 +250,7 @@
   {#if failed}
     <p class="error">{failed}</p>
   {:else if about === null}
-    <p class="soft">…</p>
+    <Loading />
   {:else if about.team && !who}
     <SignIn />
   {:else if about.team && page.name === 'admin'}
@@ -342,12 +344,15 @@
   {/if}
 </main>
 
+<Toasts />
+
 <style>
   .top {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 10px 20px;
+    min-height: 48px;
+    padding: 8px 20px;
     background: var(--chrome);
     color: var(--chrome-ink);
     flex-wrap: wrap;
@@ -359,8 +364,8 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    font-weight: 700;
-    font-size: 17px;
+    font-weight: 650;
+    font-size: 15px;
     letter-spacing: -0.01em;
     /* The mark's own colour, on the dark bar. */
     --mark: var(--on-chrome);
@@ -375,21 +380,29 @@
     font-family: var(--mono);
     font-size: 13px;
   }
+  .host {
+    opacity: 0.75;
+  }
   .slash {
-    opacity: 0.5;
+    opacity: 0.4;
   }
   select {
-    font: inherit;
-    font-weight: 600;
+    height: 28px;
+    font: 600 13px var(--mono);
     color: inherit;
     background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.16);
     border-radius: 6px;
-    padding: 2px 6px;
+    padding: 0 6px;
   }
   select option {
     color: var(--ink);
     background: var(--panel);
+  }
+  select:focus,
+  .find input:focus {
+    border-color: var(--on-chrome);
+    box-shadow: 0 0 0 3px rgba(170, 165, 247, 0.25);
   }
   .grow {
     flex: 1;
@@ -399,60 +412,70 @@
   }
   .menu {
     display: none;
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.16);
     background: rgba(255, 255, 255, 0.08);
     color: inherit;
     border-radius: 6px;
-    width: 34px;
-    height: 32px;
-    font-size: 16px;
+    width: 36px;
+    height: 36px;
+    font-size: 15px;
     line-height: 1;
+    text-align: center;
+    cursor: pointer;
   }
   .find input {
-    font: inherit;
+    height: 28px;
     font-size: 13px;
     color: inherit;
     background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.16);
     border-radius: 6px;
-    padding: 3px 8px;
-    width: 150px;
+    padding: 0 10px;
+    width: 200px;
+  }
+  .find input::placeholder {
+    color: rgba(240, 239, 250, 0.55);
   }
   .link {
+    display: inline-flex;
+    align-items: center;
+    height: 28px;
     font-size: 13px;
-    padding: 3px 10px;
+    font-weight: 500;
+    padding: 0 10px;
     border-radius: 6px;
     opacity: 0.85;
   }
   .link:hover {
     text-decoration: none;
     opacity: 1;
+    background: rgba(255, 255, 255, 0.06);
   }
   .link[aria-current='page'] {
     background: rgba(255, 255, 255, 0.12);
     opacity: 1;
-    font-weight: 600;
   }
   .link i {
     font-style: normal;
-    font-size: 11px;
-    font-weight: 700;
+    display: inline-grid;
+    place-items: center;
+    min-width: 18px;
+    height: 18px;
     margin-left: 6px;
-    padding: 0 6px;
+    padding: 0 5px;
     border-radius: 999px;
-    background: var(--accent);
-    color: var(--accent-ink);
+    background: var(--on-chrome);
+    color: var(--chrome);
+    font-size: 11px;
+    font-weight: 600;
     font-variant-numeric: tabular-nums;
   }
   .dropper {
     position: relative;
   }
   .toggle {
-    border: 0;
-    background: none;
+    gap: 4px;
     color: inherit;
-    font: inherit;
-    font-size: 13px;
     cursor: pointer;
   }
   .caret {
@@ -464,14 +487,14 @@
     position: absolute;
     top: calc(100% + 6px);
     left: 0;
-    min-width: 180px;
+    min-width: 190px;
     flex-direction: column;
-    padding: 6px;
+    padding: 4px;
     background: var(--panel);
     color: var(--ink);
     border: 1px solid var(--line);
     border-radius: 8px;
-    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25);
+    box-shadow: var(--menu-shadow);
     z-index: 30;
   }
   .drop.right {
@@ -482,13 +505,16 @@
     display: flex;
   }
   .drop a {
-    padding: 7px 10px;
-    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    height: 32px;
+    padding: 0 10px;
+    border-radius: 5px;
     font-size: 13px;
     color: var(--ink);
   }
   .drop a:hover {
-    background: var(--bg);
+    background: var(--hover);
     text-decoration: none;
   }
   .drop a[aria-current='page'] {
@@ -496,41 +522,44 @@
     color: var(--accent);
   }
   .drop > span {
-    padding: 7px 10px;
+    padding: 8px 10px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--line);
     font-size: 12px;
   }
   .drop .out {
+    display: flex;
+    align-items: center;
+    height: 32px;
+    padding: 0 10px;
+    border-radius: 5px;
     color: var(--ink);
-    text-align: left;
-    padding: 7px 10px;
-    border-radius: 6px;
     opacity: 1;
   }
   .drop .out:hover {
-    background: var(--bg);
+    background: var(--hover);
   }
   .who {
-    border: 0;
-    color: inherit;
-    font: inherit;
-    cursor: pointer;
     display: inline-grid;
     place-items: center;
-    min-width: 26px;
-    height: 26px;
-    padding: 0 8px;
+    min-width: 28px;
+    height: 28px;
+    padding: 0 10px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.12);
+    color: inherit;
     font-size: 12px;
     font-weight: 600;
+    cursor: pointer;
+  }
+  .who:hover {
+    background: rgba(255, 255, 255, 0.2);
   }
   .out {
     font-size: 13px;
-    border: 0;
-    background: none;
     color: inherit;
     opacity: 0.75;
-    padding: 2px 4px;
+    cursor: pointer;
   }
   .out:hover {
     opacity: 1;
@@ -549,9 +578,13 @@
     overflow-x: auto;
   }
   .tabs a {
-    padding: 10px 12px;
+    display: inline-flex;
+    align-items: center;
+    height: 42px;
+    padding: 0 10px;
     color: var(--soft);
-    font-size: 14px;
+    font-size: 13px;
+    font-weight: 500;
     white-space: nowrap;
     border-bottom: 2px solid transparent;
   }
@@ -561,37 +594,44 @@
   }
   .tabs a[aria-current='page'] {
     color: var(--ink);
-    font-weight: 600;
     border-color: var(--accent);
   }
   .count {
+    display: inline-grid;
+    place-items: center;
+    min-width: 18px;
+    height: 18px;
     margin-left: 6px;
-    padding: 0 7px;
-    border: 1px solid var(--line);
+    padding: 0 5px;
     border-radius: 999px;
-    background: var(--bg);
-    font-size: 12px;
-    font-weight: 500;
+    background: var(--hover);
+    color: var(--soft);
+    font-size: 11px;
+    font-weight: 600;
     font-variant-numeric: tabular-nums;
   }
   .only {
     margin-left: auto;
   }
   main {
-    max-width: 1180px;
+    max-width: 1200px;
     margin: 0 auto;
-    padding: 20px;
+    padding: 24px;
   }
   .closed {
     padding: 24px;
     max-width: 560px;
   }
+  .closed h1 {
+    font-size: 16px;
+  }
   .closed p {
-    margin: 8px 0 0;
+    margin: 6px 0 0;
+    font-size: 13px;
   }
   @media (max-width: 760px) {
     .top {
-      padding: 8px 12px;
+      padding: 6px 12px;
       gap: 8px;
       flex-wrap: nowrap;
       position: sticky;
@@ -610,11 +650,11 @@
     }
     select {
       max-width: 46vw;
-      padding: 4px 6px;
+      height: 32px;
     }
     .needs {
       white-space: nowrap;
-      padding: 5px 8px;
+      height: 32px;
     }
     .menu {
       display: inline-grid;
@@ -640,23 +680,20 @@
     }
     .more.open .find input {
       width: 100%;
-      padding: 8px 10px;
-      font-size: 15px;
+      height: 40px;
+      padding: 0 12px;
+      font-size: 16px;
       margin-bottom: 6px;
     }
     .more.open .link {
+      height: 40px;
       font-size: 15px;
-      padding: 10px;
-    }
-    .more.open .who {
-      justify-self: start;
-      margin: 8px 0 0 10px;
-      width: max-content;
     }
     .more.open .out {
-      text-align: left;
+      height: 40px;
+      padding: 0 10px;
       font-size: 15px;
-      padding: 10px;
+      text-align: left;
     }
     .more.open .toggle,
     .more.open .who {
@@ -671,11 +708,18 @@
       padding: 0;
       color: inherit;
     }
+    .more.open .drop > span {
+      border-color: rgba(255, 255, 255, 0.1);
+    }
     .more.open .drop a,
     .more.open .drop .out {
+      height: 40px;
       color: inherit;
       font-size: 15px;
-      padding: 10px;
+    }
+    .more.open .drop a:hover,
+    .more.open .drop .out:hover {
+      background: rgba(255, 255, 255, 0.06);
     }
   }
   @media (max-width: 640px) {
@@ -683,7 +727,7 @@
       padding: 0 8px;
     }
     main {
-      padding: 14px;
+      padding: 16px;
     }
   }
 </style>

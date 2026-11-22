@@ -5,6 +5,8 @@
   import { lacking, sameCode, standing } from './standing.js';
   import Assistant from './Assistant.svelte';
   import State from './State.svelte';
+  import Empty from './Empty.svelte';
+  import Loading from './Loading.svelte';
 
   // `user`: who is signed in, behind a server. `role`: what they may do
   // in this repository there; on one's own machine nothing says it, and
@@ -111,7 +113,7 @@
 <h1 class="sr">Lanes</h1>
 
 <div class="filters">
-  <div class="which" role="group" aria-label="Which lanes">
+  <div class="which seg" role="group" aria-label="Which lanes">
     {#each filters as [name, label, found] (name)}
       <button aria-pressed={filter === name} onclick={() => pick(name)}>{label} <b>{found.length}</b></button>
     {/each}
@@ -133,9 +135,9 @@
     }}
   >
     <h2>Open a lane</h2>
-    <label>Who works in it <input bind:value={agent} placeholder="alice" use:focus /></label>
-    <label>Why: what the next agent is told before it changes this code <input bind:value={intent} placeholder="prices in cents" /></label>
-    <label
+    <label class="field">Who works in it <input bind:value={agent} placeholder="alice" use:focus /></label>
+    <label class="field">Why: what the next agent is told before it changes this code <input bind:value={intent} placeholder="prices in cents" /></label>
+    <label class="field"
       >What it will change: functions, files, directories
       <input class="mono" bind:value={scope} placeholder="src/shop.ts:total src/billing/" /></label
     >
@@ -147,7 +149,7 @@
   </form>
 {/if}
 {#if opened}
-  <p class="notice">
+  <p class="notice ok">
     <a href={laneLink(opened.id)}>{opened.id}</a> is open for {opened.agent}. Its working copy:
     <span class="mono">{opened.workdir}</span>
   </p>
@@ -156,17 +158,14 @@
 {#if failed}
   <p class="error">{failed}</p>
 {:else if lanes === null || shown === null}
-  <p class="soft">…</p>
+  <Loading />
 {:else if shown.length === 0}
-  <div class="panel empty">
-    <p>{nothing[filter]}</p>
+  <Empty title={nothing[filter]}>
     {#if filter === 'open'}
-      <p class="soft">
-        An agent opens one with the <code>open_lane</code> tool; a person, with
-        <code>kito lane open &lt;agent&gt; --intent "…" --scope …</code>
-      </p>
+      An agent opens one with the <code>open_lane</code> tool; a person, with
+      <code>kito lane open &lt;agent&gt; --intent "…" --scope …</code>
     {/if}
-  </div>
+  </Empty>
 {:else}
   <ul class="panel list">
     {#each shown as lane (lane.id)}
@@ -214,65 +213,34 @@
     justify-content: space-between;
     gap: 12px;
     flex-wrap: wrap;
-    margin-bottom: 12px;
+    margin-bottom: 16px;
   }
   .which {
-    display: flex;
-    gap: 6px;
     flex-wrap: wrap;
   }
-  .which button {
-    padding: 3px 12px;
-    border-radius: 999px;
-    font-size: 13px;
-    color: var(--soft);
-  }
   .which button b {
-    font-variant-numeric: tabular-nums;
+    margin-left: 2px;
+    color: var(--faint);
   }
-  .which button[aria-pressed='true'] {
-    background: var(--ink);
-    border-color: var(--ink);
-    color: var(--bg);
+  .which button[aria-pressed='true'] b {
+    color: var(--soft);
   }
   .open {
-    padding: 14px 16px;
+    padding: 16px;
     margin-bottom: 16px;
     display: grid;
-    gap: 10px;
+    gap: 12px;
     max-width: 720px;
-  }
-  label {
-    display: grid;
-    gap: 4px;
-    font-size: 13px;
-    color: var(--soft);
-  }
-  input {
-    padding: 7px 10px;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    background: var(--panel);
-    color: var(--ink);
-    font: inherit;
-    font-size: 14px;
-  }
-  input:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
   }
   .actions {
     display: flex;
-    gap: 6px;
+    gap: 8px;
   }
-  .notice {
+  .notice.ok {
     margin: 0 0 16px;
-    padding: 8px 14px;
-    border-radius: 8px;
     background: var(--ok-bg);
     color: var(--ok);
-    font-size: 14px;
-    overflow-wrap: anywhere;
+    border-color: color-mix(in srgb, var(--ok) 25%, transparent);
   }
   .list {
     list-style: none;
@@ -292,19 +260,20 @@
   }
   .row:hover {
     text-decoration: none;
-    background: color-mix(in srgb, var(--accent) 6%, transparent);
+    background: var(--hover);
   }
   .body {
     flex: 1;
     min-width: 0;
     display: grid;
+    gap: 2px;
   }
   .title {
-    font-weight: 600;
+    font-weight: 500;
     overflow-wrap: anywhere;
   }
   .meta {
-    font-size: 13px;
+    font-size: 12.5px;
     color: var(--soft);
     overflow-wrap: anywhere;
   }
@@ -316,13 +285,12 @@
     justify-content: flex-end;
     max-width: 45%;
   }
-  .empty {
-    padding: 20px 24px;
-  }
-  .empty p {
-    margin: 0 0 4px;
-  }
   @media (max-width: 640px) {
+    .which {
+      flex-wrap: nowrap;
+      max-width: 100%;
+      overflow-x: auto;
+    }
     .row {
       flex-wrap: wrap;
     }
@@ -330,7 +298,7 @@
       max-width: none;
       flex-basis: 100%;
       justify-content: flex-start;
-      padding-left: 30px;
+      padding-left: 28px;
     }
   }
 </style>

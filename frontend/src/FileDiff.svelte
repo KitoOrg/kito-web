@@ -83,7 +83,7 @@
       <span class="plus">+{file.added}</span>
       <span class="minus">−{file.removed}</span>
     {/if}
-    <label class="viewed" title="Fold it until the lane changes it again">
+    <label class="check viewed" title="Fold it until the lane changes it again">
       <input type="checkbox" checked={viewed} onchange={(event) => setViewed(event.currentTarget.checked)} /> Viewed
     </label>
   </header>
@@ -130,7 +130,7 @@
             <span class="say">
               {#if row.now !== null && mayWrite && draft}
                 <button
-                  class="add"
+                  class="bare add"
                   title={`Comment on line ${row.now}`}
                   aria-label={`Comment on line ${row.now} of ${file.path}`}
                   onclick={() => {
@@ -159,7 +159,7 @@
                   {#if one.suggestion !== null && one.suggestion !== undefined}
                     <pre class="suggested">{one.suggestion}</pre>
                   {/if}
-                  <button class="quiet" onclick={() => undraft?.(one.id)}>Take it out</button>
+                  <button class="quiet sm" onclick={() => undraft?.(one.id)}>Take it out</button>
                 </div>
               </div>
             {/each}
@@ -182,13 +182,13 @@
                   <textarea class="mono code-edit" bind:value={suggestion} aria-label="Suggested lines" spellcheck="false"></textarea>
                 {/if}
                 <div class="actions">
-                  <button class="primary">Add to review</button>
+                  <button class="primary sm">Add to review</button>
                   {#if suggestion === null}
-                    <button type="button" onclick={() => (suggestion = lineText(row.now))}>Suggest a change</button>
+                    <button class="sm" type="button" onclick={() => (suggestion = lineText(row.now))}>Suggest a change</button>
                   {:else}
-                    <button type="button" class="quiet" onclick={() => (suggestion = null)}>No suggestion</button>
+                    <button type="button" class="quiet sm" onclick={() => (suggestion = null)}>No suggestion</button>
                   {/if}
-                  <button type="button" class="quiet" onclick={() => (writing = null)}>Cancel</button>
+                  <button type="button" class="quiet sm" onclick={() => (writing = null)}>Cancel</button>
                 </div>
                 {#if failed}<p class="error">{failed}</p>{/if}
               </form>
@@ -209,14 +209,16 @@
   }
   header {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 10px;
-    padding: 10px 14px;
+    min-height: 44px;
+    padding: 8px 16px;
     border-bottom: 1px solid var(--line);
     flex-wrap: wrap;
   }
   h2 {
-    font-size: 14px;
+    font-size: 13px;
+    font-weight: 600;
     overflow-wrap: anywhere;
   }
   h2 a {
@@ -310,12 +312,16 @@
     padding-right: 14px;
   }
   .add {
+    display: inline-grid;
+    place-items: center;
     width: 18px;
     height: 18px;
     padding: 0;
     line-height: 1;
     font-size: 13px;
+    border: 1px solid var(--accent);
     border-radius: 4px;
+    cursor: pointer;
     background: var(--accent);
     border-color: var(--accent);
     color: var(--accent-ink);
@@ -338,19 +344,16 @@
     margin-top: 8px;
   }
   .viewed {
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-    font-size: 12px;
+    gap: 6px;
+    font-size: 12.5px;
     color: var(--soft);
-    cursor: pointer;
   }
   .draft {
     border: 1px dashed var(--accent);
     border-radius: 8px;
     background: var(--panel);
     padding: 8px 12px;
-    font-size: 14px;
+    font-size: 13px;
   }
   .draft .head {
     margin: 0;
@@ -375,9 +378,8 @@
   }
   .code-edit {
     width: 100%;
-    box-sizing: border-box;
     min-height: 60px;
-    border: 1px solid var(--line);
+    border: 1px solid var(--line-strong);
     color: var(--ink);
   }
   .small {

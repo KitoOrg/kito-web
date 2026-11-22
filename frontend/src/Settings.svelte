@@ -3,6 +3,8 @@
   // server's admins. The checks run commands on the server's machine:
   // only its admins change them. Who changed what is kept by the server.
   import { ago, ask } from './api.js';
+  import { toast } from './toast.svelte.js';
+  import Loading from './Loading.svelte';
 
   let { repo, who } = $props();
 
@@ -10,7 +12,6 @@
   let history = $state([]);
   let failed = $state('');
   let busy = $state(false);
-  let saved = $state('');
 
   // What is being edited.
   let approvals = $state(0);
@@ -44,10 +45,9 @@
   async function change(what, work) {
     busy = true;
     failed = '';
-    saved = '';
     try {
       await work();
-      saved = what;
+      toast(`${what[0].toUpperCase()}${what.slice(1)} saved`);
     } catch (error) {
       failed = error.message;
     }
@@ -86,16 +86,19 @@
   {/each}
 {/snippet}
 
-<h1>Settings of {repo}</h1>
-<p class="soft">A change counts for the next integration; the server keeps who made it.</p>
+<div class="page-head">
+  <div>
+    <h1>Settings of {repo}</h1>
+    <p class="lead">A change counts for the next integration; the server keeps who made it.</p>
+  </div>
+</div>
 
 {#if failed}<p class="error" role="alert">{failed}</p>{/if}
-{#if saved}<p class="chip ok" role="status">{saved} saved</p>{/if}
 
 {#if now === null && !failed}
-  <p class="soft">…</p>
+  <Loading lines={4} />
 {:else if now}
-  <h2 class="group">Rules</h2>
+  <h2 class="section-title group">Rules</h2>
   <p class="soft group-about">What every lane meets before it goes in.</p>
   <section class="panel setting">
     <div class="head">
@@ -131,7 +134,7 @@
     <p class="soft">Commands that must succeed on the merged result, one per line, in the order they run.</p>
     {#if admin}
       <textarea rows="4" class="mono" bind:value={checks} placeholder="npm test"></textarea>
-      <div><button disabled={busy || checks.trim() === (now.checks ?? []).join('\n')} onclick={saveChecks}>Save</button></div>
+      <div class="row"><button disabled={busy || checks.trim() === (now.checks ?? []).join('\n')} onclick={saveChecks}>Save</button></div>
     {:else if (now.checks ?? []).length === 0}
       <p class="faint">None: a lane goes in as soon as it merges.</p>
     {:else}
@@ -150,7 +153,7 @@
     {@render changes('push')}
   </section>
 
-  <h2 class="group">Plugins</h2>
+  <h2 class="section-title group">Plugins</h2>
   <p class="soft group-about">
     {#if plugins.length > 0}
       Running on this server: {#each plugins as name, i}<span class="mono">{name}</span>{i < plugins.length - 1 ? ', ' : ''}{/each}.
@@ -191,28 +194,30 @@
 
 <style>
   .group {
-    margin: 28px 0 0;
-    font-size: 13px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--soft);
+    margin-bottom: 0;
   }
   .group-about {
-    margin: 4px 0 0;
+    margin: 4px 0 12px;
     max-width: 720px;
+    font-size: 13px;
   }
   .setting {
-    padding: 12px 16px;
-    margin: 12px 0;
+    display: grid;
+    gap: 8px;
+    justify-items: start;
+    padding: 16px;
+    margin: 0 0 12px;
     max-width: 720px;
   }
-  .setting h2 {
+  .setting > * {
     margin: 0;
-    font-size: 15px;
+  }
+  .setting > textarea,
+  .setting > .row {
+    justify-self: stretch;
   }
   .setting p {
-    margin: 6px 0;
+    font-size: 13px;
   }
   .head {
     display: flex;
@@ -223,35 +228,27 @@
     display: flex;
     gap: 8px;
     align-items: center;
+    flex-wrap: wrap;
   }
   .change {
     font-size: 12px;
-    margin: 4px 0 0;
   }
-  input,
-  select,
-  textarea {
-    font: inherit;
-    font-size: 13px;
-    color: var(--ink);
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 4px 8px;
+  .setting .change {
+    font-size: 12px;
   }
   input[type='number'] {
-    width: 80px;
+    width: 88px;
   }
   .wide {
     flex: 1;
+    min-width: 200px;
   }
-  textarea {
-    width: 100%;
-    box-sizing: border-box;
-    margin-bottom: 6px;
+  select {
+    max-width: 100%;
   }
   ol {
-    margin: 6px 0;
+    margin: 0;
     padding-left: 20px;
+    font-size: 13px;
   }
 </style>

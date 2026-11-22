@@ -6,6 +6,8 @@
   // the kitchen, through a lane.
   import { ago, ask } from './api.js';
   import { markdown } from './md.js';
+  import Empty from './Empty.svelte';
+  import Loading from './Loading.svelte';
 
   let { repo = null, who = null, role = null } = $props();
 
@@ -109,19 +111,23 @@
   );
 </script>
 
-<h1>What the assistants are told{repo ? ` in ${repo}` : ''}</h1>
-<p class="soft">
-  Kito's rules come first, then the kitchen's instructions, then this repository's own, which win where both have a
-  file of the same name. Kito writes them into <code>CLAUDE.md</code> and <code>AGENTS.md</code> at every session:
-  they are not in the repository.
-</p>
+<div class="page-head">
+  <div>
+    <h1>What the assistants are told{repo ? ` in ${repo}` : ''}</h1>
+    <p class="lead">
+      Kito's rules come first, then the kitchen's instructions, then this repository's own, which win where both have a
+      file of the same name. Kito writes them into <code>CLAUDE.md</code> and <code>AGENTS.md</code> at every session:
+      they are not in the repository.
+    </p>
+  </div>
+</div>
 
 {#if failed}<p class="error" role="alert">{failed}</p>{/if}
 
 {#if told === null && !failed}
-  <p class="soft">…</p>
+  <Loading lines={4} />
 {:else if told}
-  <p class="faint">
+  <p class="faint kitchen">
     Kitchen:
     {#if !told.kitchen}the standard one (Kito's rules alone)
     {:else if mayOpenKitchen}<a href={`?repo=${encodeURIComponent(kitchenRepo)}#/why`}>{kitchenRepo}</a>
@@ -135,7 +141,7 @@
         <h2>{folder === 'all' ? 'Every assistant' : assistants.find(([name]) => name === folder)?.[1] ?? folder}</h2>
         {#each items as item (item.name)}
           <div class="item" class:current={open?.name === item.name}>
-            <button class="name" onclick={() => edit(item)}>
+            <button class="bare name" onclick={() => edit(item)}>
               <span class="mono">{item.name.split('/')[1]}</span>
               <span class="chip {item.from === 'kitchen' ? '' : 'ok'}">{whereFrom(item)}</span>
             </button>
@@ -148,7 +154,7 @@
         <div class="item">
           <span class="mono faint">{name}</span>
           <span class="chip">the kitchen's, not told here</span>
-          {#if mayWrite}<button class="quiet" disabled={busy} onclick={() => removeOwn(name)}>Tell it again</button>{/if}
+          {#if mayWrite}<button class="quiet sm" disabled={busy} onclick={() => removeOwn(name)}>Tell it again</button>{/if}
         </div>
       {/each}
 
@@ -168,8 +174,10 @@
         <div class="head">
           <span class="mono"><b>{open.name}</b></span>
           <span class="grow"></span>
-          <button class:on={showing === 'edit'} onclick={() => (showing = 'edit')}>Text</button>
-          <button class:on={showing === 'read'} onclick={() => (showing = 'read')}>Preview</button>
+          <div class="seg" role="group" aria-label="Text or preview">
+            <button aria-pressed={showing === 'edit'} onclick={() => (showing = 'edit')}>Text</button>
+            <button aria-pressed={showing === 'read'} onclick={() => (showing = 'read')}>Preview</button>
+          </div>
         </div>
         {#if open.from === 'kitchen' && !open.fresh}
           <p class="faint">
@@ -208,25 +216,34 @@
     </section>
   </div>
 
-  <h2>Changes</h2>
-  {#each history as change}
-    <div class="change">
-      <span><b>{change.by}</b> {change.after === null || change.after === undefined ? 'removed' : change.before ? 'changed' : 'wrote'} <span class="mono">{change.name}</span></span>
-      <span class="faint">{ago(change.at_ms)}</span>
-      {#if mayWrite}<button class="quiet" disabled={busy} onclick={() => restore(change)}>Put back as before</button>{/if}
-    </div>
+  <h2 class="section-title">Changes</h2>
+  {#if history.length === 0}
+    <Empty title="No change yet.">Who writes, changes or removes an instruction here is kept, with a way to put it back.</Empty>
   {:else}
-    <p class="faint">No change yet.</p>
-  {/each}
+    <div class="panel changes">
+      {#each history as change}
+        <div class="change">
+          <span><b>{change.by}</b> {change.after === null || change.after === undefined ? 'removed' : change.before ? 'changed' : 'wrote'} <span class="mono">{change.name}</span></span>
+          <span class="faint">{ago(change.at_ms)}</span>
+          <span class="grow"></span>
+          {#if mayWrite}<button class="quiet sm" disabled={busy} onclick={() => restore(change)}>Put back as before</button>{/if}
+        </div>
+      {/each}
+    </div>
+  {/if}
 {/if}
 
 <style>
+  .kitchen {
+    margin: 0 0 12px;
+    font-size: 13px;
+  }
   .layout {
     display: grid;
-    grid-template-columns: minmax(220px, 300px) 1fr;
+    grid-template-columns: minmax(220px, 280px) 1fr;
     gap: 16px;
     align-items: start;
-    margin: 12px 0 24px;
+    margin: 0 0 8px;
   }
   @media (max-width: 760px) {
     .layout {
@@ -234,11 +251,13 @@
     }
   }
   .list h2 {
+    margin: 16px 0 6px;
     font-size: 12px;
+    font-weight: 500;
     color: var(--soft);
-    margin: 12px 0 4px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+  }
+  .list h2:first-child {
+    margin-top: 0;
   }
   .item {
     display: flex;
@@ -246,21 +265,24 @@
     gap: 6px;
     flex-wrap: wrap;
     margin: 2px 0;
+    font-size: 13px;
   }
   .item .name {
     display: flex;
     align-items: center;
     gap: 6px;
     width: 100%;
-    text-align: left;
-    background: none;
+    min-height: 32px;
+    padding: 0 8px;
     border: 1px solid transparent;
-    border-radius: 6px;
-    padding: 4px 6px;
+    border-radius: var(--radius);
     color: inherit;
+    cursor: pointer;
   }
-  .item.current .name,
   .item .name:hover {
+    background: var(--hover);
+  }
+  .item.current .name {
     border-color: var(--line);
     background: var(--panel);
   }
@@ -274,58 +296,63 @@
     min-width: 0;
   }
   .editor {
-    padding: 12px 16px;
+    padding: 16px;
     min-height: 300px;
+    display: grid;
+    gap: 10px;
+    align-content: start;
+  }
+  .editor > p {
+    margin: 0;
+    font-size: 13px;
   }
   .head {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 8px;
+    font-size: 13px;
   }
   .grow {
     flex: 1;
   }
-  .on {
-    font-weight: 600;
-  }
   textarea {
-    width: 100%;
-    box-sizing: border-box;
-  }
-  input,
-  select,
-  textarea {
-    font: inherit;
-    font-size: 13px;
-    color: var(--ink);
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 4px 8px;
+    font-family: var(--mono);
+    font-size: 12.5px;
   }
   .actions {
     display: flex;
     gap: 8px;
-    margin-top: 8px;
+    flex-wrap: wrap;
   }
   .rendered {
     font-size: 14px;
-    line-height: 1.55;
+    line-height: 1.6;
     max-height: 60vh;
     overflow: auto;
   }
   .rendered :global(pre) {
-    background: rgba(127, 127, 127, 0.1);
-    padding: 8px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    padding: 8px 10px;
     border-radius: 6px;
     overflow: auto;
+  }
+  .changes {
+    overflow: hidden;
   }
   .change {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 6px 0;
-    border-bottom: 1px solid var(--line);
+    min-height: 40px;
+    padding: 4px 16px;
+    font-size: 13px;
+    flex-wrap: wrap;
+  }
+  .change + .change {
+    border-top: 1px solid var(--line);
+  }
+  .change b {
+    font-weight: 600;
   }
 </style>

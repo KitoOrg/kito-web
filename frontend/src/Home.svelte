@@ -6,6 +6,8 @@
   import { ago } from './api.js';
   import { assistantOf } from './assistants.js';
   import Assistant from './Assistant.svelte';
+  import Empty from './Empty.svelte';
+  import Loading from './Loading.svelte';
 
   let { seen, who } = $props();
 
@@ -19,18 +21,17 @@
 </script>
 
 {#if who.repos.length === 0}
-  <div class="panel none">
-    <h1>No repository yet</h1>
-    <p class="soft">You are signed in as {who.user}, and this server has no repository you may use. Whoever runs it gives you one.</p>
-  </div>
+  <Empty title="No repository yet">
+    You are signed in as {who.user}, and this server has no repository you may use. Whoever runs it gives you one.
+  </Empty>
 {:else if seen === null}
-  <p class="soft">…</p>
+  <Loading />
 {:else}
   <div class="cols">
     <div>
-      <h2>Needs you</h2>
+      <h2 class="section-title">Needs you</h2>
       {#if seen.needs.length === 0}
-        <div class="panel quiet">Nothing waits for you. Agents are at work, or done.</div>
+        <Empty title="Nothing waits for you.">Agents are at work, or done.</Empty>
       {:else}
         <ul class="panel list">
           {#each seen.needs as need (need.href + need.kind)}
@@ -48,7 +49,7 @@
         </ul>
       {/if}
 
-      <h2>Repositories</h2>
+      <h2 class="section-title">Repositories</h2>
       <div class="cards">
         {#each seen.repos as repo (repo.name)}
           {@const sum = tally(repo)}
@@ -111,20 +112,17 @@
 {/if}
 
 <style>
-  h2 {
-    font-size: 15px;
-    margin: 0 0 8px;
-  }
   .cols {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 300px;
-    gap: 20px;
+    gap: 24px;
     align-items: start;
   }
   .list {
     list-style: none;
-    margin: 0 0 24px;
+    margin: 0;
     padding: 0;
+    overflow: hidden;
   }
   .list li + li {
     border-top: 1px solid var(--line);
@@ -138,29 +136,25 @@
   }
   .row:hover {
     text-decoration: none;
-    background: color-mix(in srgb, var(--accent) 6%, transparent);
+    background: var(--hover);
   }
   .body {
     flex: 1;
     min-width: 0;
     display: grid;
+    gap: 2px;
   }
   .title {
-    font-weight: 600;
+    font-weight: 500;
     overflow-wrap: anywhere;
   }
   .meta {
-    font-size: 13px;
-    color: var(--soft);
-  }
-  .quiet {
-    padding: 16px;
-    margin-bottom: 24px;
+    font-size: 12.5px;
     color: var(--soft);
   }
   .cards {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
     gap: 12px;
   }
   .card {
@@ -168,63 +162,69 @@
     gap: 2px;
     padding: 14px 16px;
     color: inherit;
+    transition: border-color 0.12s;
   }
   .card:hover {
     text-decoration: none;
-    border-color: var(--faint);
+    border-color: var(--line-strong);
   }
   .name {
-    font-weight: 700;
-    font-size: 14px;
-    color: var(--accent);
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--ink);
   }
   .role,
   .last {
-    font-size: 13px;
+    font-size: 12.5px;
   }
   .numbers {
     display: flex;
     gap: 14px;
     flex-wrap: wrap;
-    margin-top: 8px;
-    font-size: 13px;
+    margin: 8px 0 2px;
+    font-size: 12.5px;
     color: var(--soft);
     font-variant-numeric: tabular-nums;
   }
   .numbers b {
     color: var(--ink);
+    font-weight: 600;
   }
   .numbers .bad,
   .numbers .bad b {
     color: var(--bad);
   }
   .small {
-    font-size: 13px;
-    padding: 6px 10px;
+    margin: 6px 0 0;
+  }
+  .side {
+    overflow: hidden;
   }
   .side section {
-    padding: 12px 16px;
+    padding: 14px 16px;
   }
   .side section + section {
     border-top: 1px solid var(--line);
   }
   h3 {
-    margin: 0 0 8px;
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--faint);
+    margin: 0 0 10px;
   }
   .worker {
     display: flex;
-    gap: 8px;
+    gap: 10px;
     align-items: center;
-    margin: 6px 0;
+    margin: 0 -8px;
+    padding: 6px 8px;
+    border-radius: var(--radius);
     color: inherit;
-    font-size: 14px;
+    font-size: 13px;
   }
   .worker:hover {
     text-decoration: none;
+    background: var(--hover);
+  }
+  .worker b {
+    font-weight: 600;
   }
   .worker .faint {
     display: block;
@@ -244,7 +244,7 @@
     background: var(--done-bg);
     color: var(--done);
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 600;
     flex: none;
   }
   .overlap {
@@ -256,13 +256,6 @@
   .side p {
     margin: 6px 0 0;
     font-size: 12px;
-  }
-  .none {
-    padding: 24px;
-    max-width: 560px;
-  }
-  .none p {
-    margin: 8px 0 0;
   }
   @media (max-width: 820px) {
     .cols {

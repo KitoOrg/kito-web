@@ -43,7 +43,7 @@
       enter();
     }}
   >
-    <label
+    <label class="field"
       >{methods.length > 0 ? 'Or with a token of this server' : 'With the token this server gave you'}
       <input type="password" bind:value={token} autocomplete="off" placeholder="kito_…" /></label
     >
@@ -57,11 +57,11 @@
 
 <style>
   .signin {
-    padding: 24px;
-    max-width: 420px;
-    margin: 48px auto 0;
+    padding: 28px;
+    max-width: 400px;
+    margin: 64px auto 0;
     display: grid;
-    gap: 16px;
+    gap: 20px;
   }
   h1 {
     margin: 0;
@@ -74,39 +74,38 @@
     gap: 8px;
   }
   .way {
-    display: block;
-    text-align: center;
-    padding: 8px 12px;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--control);
+    padding: 0 12px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius);
+    background: var(--panel);
     color: var(--ink);
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: 500;
   }
   .way:hover {
     text-decoration: none;
-    border-color: var(--soft);
+    background: var(--hover);
   }
   form {
     display: grid;
-    gap: 8px;
+    gap: 12px;
   }
   label {
-    display: grid;
-    gap: 4px;
-    font-size: 13px;
     color: var(--soft);
-  }
-  input {
-    font: inherit;
-    padding: 6px 8px;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    background: var(--panel);
-    color: var(--ink);
+    font-weight: 400;
   }
   p {
     margin: 0;
-    font-size: 13px;
+    font-size: 12.5px;
+  }
+  @media (max-width: 640px) {
+    .signin {
+      margin-top: 24px;
+      padding: 20px;
+    }
   }
 </style>

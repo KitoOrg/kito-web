@@ -5,6 +5,7 @@
   // comments, and closes them; a task is never closed by Kito itself.
   import { ago, ask, laneLink } from './api.js';
   import { markdown } from './md.js';
+  import Loading from './Loading.svelte';
 
   let { role = null, user = null, open: opened = null } = $props();
 
@@ -95,15 +96,20 @@
   const dropped = $derived((tasks ?? []).filter((task) => task.state === 'dropped'));
 </script>
 
-<div class="top">
-  <h1>Tasks</h1>
-  <span class="grow"></span>
-  {#if mayWrite}<button class="primary" onclick={() => (adding = { title: '', text: '', for: '' })}>Ask for something</button>{/if}
+<div class="page-head">
+  <div>
+    <h1>Tasks</h1>
+    <p class="lead">
+      What needs doing here, and the lanes that do it. Open a lane for a task with <code>kito lane open … --task task#3</code>;
+      agents take one up when you tell them to. A task is closed by a person, once its lanes are.
+    </p>
+  </div>
+  {#if mayWrite}
+    <div class="actions">
+      <button class="primary" onclick={() => (adding = { title: '', text: '', for: '' })}>Ask for something</button>
+    </div>
+  {/if}
 </div>
-<p class="soft">
-  What needs doing here, and the lanes that do it. Open a lane for a task with <code>kito lane open … --task task#3</code>;
-  agents take one up when you tell them to. A task is closed by a person, once its lanes are.
-</p>
 {#if failed}<p class="error" role="alert">{failed}</p>{/if}
 
 {#if adding}
@@ -119,7 +125,7 @@
 {/if}
 
 {#if tasks === null && !failed}
-  <p class="soft">…</p>
+  <Loading />
 {:else if tasks}
   <div class="board">
     {#each columns as [column, title]}
@@ -132,7 +138,7 @@
         <h2>{title} <span class="faint">{inColumn(column).length}</span></h2>
         {#each inColumn(column) as task (task.id)}
           <button
-            class="card panel"
+            class="bare card panel"
             class:current={shown?.id === task.id}
             draggable={mayWrite}
             ondragstart={() => (dragged = task.id)}
@@ -153,9 +159,9 @@
     {/each}
   </div>
   {#if dropped.length > 0}
-    <button class="quiet" onclick={() => (showDropped = !showDropped)}>{showDropped ? 'Hide' : 'Show'} {dropped.length} dropped</button>
+    <button class="quiet sm" onclick={() => (showDropped = !showDropped)}>{showDropped ? 'Hide' : 'Show'} {dropped.length} dropped</button>
     {#if showDropped}
-      {#each dropped as task}<button class="quiet mono" onclick={() => show(task.id)}>{task.id} {task.title}</button>{/each}
+      {#each dropped as task}<button class="quiet sm mono" onclick={() => show(task.id)}>{task.id} {task.title}</button>{/each}
     {/if}
   {/if}
 
@@ -165,7 +171,7 @@
         <span class="mono faint">{shown.id}</span>
         <h2>{shown.title}</h2>
         <span class="grow"></span>
-        <button class="quiet" onclick={() => (shown = null)}>Close</button>
+        <button class="quiet sm" onclick={() => (shown = null)}>Close</button>
       </div>
       <p class="faint">
         Asked for by {shown.by}, {ago(shown.at_ms)}{#if shown.claimed_by}; taken up by {shown.claimed_by}{/if}{#if shown.source?.url}; from <a href={shown.source.url} target="_blank" rel="noreferrer">{shown.source.kind ?? 'elsewhere'}</a>{/if}.
@@ -173,7 +179,7 @@
       {#if shown.text}<div class="rendered">{@html markdown(shown.text)}</div>{/if}
 
       <div class="row">
-        <strong>Lanes</strong>
+        <strong class="label">Lanes</strong>
         {#each shown.lanes as lane}
           <a class="chip" href={laneLink(lane.id)}>{lane.id} · {lane.agent} · {lane.state}</a>
         {:else}<span class="faint">none yet</span>{/each}
@@ -181,7 +187,7 @@
 
       {#if mayWrite}
         <div class="row">
-          <strong>For</strong>
+          <strong class="label">For</strong>
           <input placeholder="nobody" bind:value={assignee} />
           <button disabled={busy || assignee.trim() === (shown.for ?? '')} onclick={assign}>Save</button>
           <span class="grow"></span>
@@ -214,7 +220,6 @@
 {/if}
 
 <style>
-  .top,
   .row {
     display: flex;
     align-items: center;
@@ -228,86 +233,106 @@
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 12px;
-    margin: 12px 0;
+    margin: 0 0 16px;
   }
   @media (max-width: 860px) {
     .board {
       grid-template-columns: 1fr 1fr;
     }
   }
+  @media (max-width: 520px) {
+    .board {
+      grid-template-columns: 1fr;
+    }
+    .column {
+      min-height: 64px;
+    }
+  }
   .column {
     min-height: 120px;
     padding: 4px;
-    border-radius: 8px;
-    background: rgba(127, 127, 127, 0.06);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-panel);
+    background: color-mix(in srgb, var(--hover) 60%, transparent);
   }
   .column h2 {
+    display: flex;
+    gap: 6px;
+    align-items: center;
     font-size: 13px;
-    margin: 6px 6px 8px;
+    margin: 6px 8px 8px;
+  }
+  .column h2 .faint {
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
   }
   .card {
     display: grid;
     gap: 4px;
     width: 100%;
-    text-align: left;
-    padding: 8px 10px;
+    padding: 10px 12px;
     margin-bottom: 6px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-panel);
     color: inherit;
+    font-size: 13px;
     cursor: pointer;
+    transition: border-color 0.12s;
+  }
+  .card:hover {
+    border-color: var(--line-strong);
   }
   .card.current {
-    outline: 2px solid var(--accent);
+    border-color: var(--accent);
+    box-shadow: var(--ring);
   }
   .card .title {
-    font-weight: 600;
+    font-weight: 500;
   }
   .meta {
     display: flex;
     gap: 4px;
     flex-wrap: wrap;
+    align-items: center;
     font-size: 12px;
   }
   .chip.mine {
-    outline: 1px solid var(--accent);
+    border-color: var(--accent);
+    color: var(--accent);
   }
   .detail,
   .add {
-    padding: 12px 16px;
-    margin: 12px 0;
+    padding: 16px;
+    margin: 16px 0;
     display: grid;
-    gap: 8px;
+    gap: 10px;
   }
   .detail h2,
   .detail h3 {
     margin: 0;
   }
   .detail h3 {
-    font-size: 14px;
     margin-top: 8px;
+  }
+  .detail p {
+    margin: 0;
+    font-size: 13px;
+  }
+  .label {
+    min-width: 48px;
+    font-size: 13px;
+    font-weight: 500;
   }
   .said {
     border-left: 2px solid var(--line);
     padding-left: 10px;
+    font-size: 13px;
   }
   .wide {
     flex: 1;
   }
-  input,
-  textarea {
-    font: inherit;
-    font-size: 13px;
-    color: var(--ink);
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 4px 8px;
-  }
-  textarea {
-    width: 100%;
-    box-sizing: border-box;
-  }
   .rendered {
-    font-size: 14px;
-    line-height: 1.5;
+    font-size: 13px;
+    line-height: 1.55;
   }
 </style>

@@ -4,6 +4,9 @@
   // four things done to one: install, enable, disable, remove. The server
   // decides who may; this page only asks.
   import { adminChange, adminPlugins } from './api.js';
+  import { toast } from './toast.svelte.js';
+  import Loading from './Loading.svelte';
+  import Empty from './Empty.svelte';
 
   let all = $state(null);
   let failed = $state('');
@@ -31,6 +34,7 @@
     done = null;
     try {
       done = await adminChange(body);
+      if (done?.done) toast(done.done);
       enabling = null;
     } catch (error) {
       failed = error.message;
@@ -81,17 +85,21 @@
   let forPeople = $derived((all?.listed ?? []).filter((listed) => !runsHere(listed)));
 </script>
 
-<h1>Plugins of this server</h1>
-<p class="soft">
-  A plugin is a program run on the server’s machine. It is installed by its name from the registry, runs nowhere
-  until it is enabled, and is given only what you tick.
-</p>
+<div class="page-head">
+  <div>
+    <h1>Plugins of this server</h1>
+    <p class="lead">
+      A plugin is a program run on the server’s machine. It is installed by its name from the registry, runs nowhere
+      until it is enabled, and is given only what you tick.
+    </p>
+  </div>
+</div>
 
 {#if failed}
   <p class="error" role="alert">{failed}</p>
 {/if}
-{#if done}
-  <div class="panel said" role="status">
+{#if done && ((done.said ?? []).length > 0 || done.from)}
+  <div class="panel said">
     <p>{done.done}</p>
     {#each done.said ?? [] as line}
       <p class="mono soft">{line}</p>
@@ -103,11 +111,11 @@
 {/if}
 
 {#if all === null && !failed}
-  <p class="soft">…</p>
+  <Loading lines={4} />
 {:else if all}
-  <h2>On this server</h2>
+  <h2 class="section-title">On this server</h2>
   {#if installed.length === 0}
-    <p class="soft">None yet.</p>
+    <Empty title="None yet.">Install one from the registry below; it runs nowhere until it is enabled.</Empty>
   {/if}
   {#each installed as plugin (plugin.name)}
     <section class="panel plugin">
@@ -124,11 +132,11 @@
         {/if}
         <span class="grow"></span>
         {#if plugin.installed && !plugin.enabled && !plugin.problem}
-          <button class="primary" disabled={busy !== ''} onclick={() => startEnabling(plugin)}>Enable…</button>
-          <button disabled={busy !== ''} onclick={() => remove(plugin)}>Remove</button>
+          <button class="primary sm" disabled={busy !== ''} onclick={() => startEnabling(plugin)}>Enable…</button>
+          <button class="sm" disabled={busy !== ''} onclick={() => remove(plugin)}>Remove</button>
         {:else if plugin.enabled && !plugin.serves_pages}
-          <button disabled={busy !== ''} onclick={() => disable(plugin, false)}>Disable</button>
-          <button class="quiet" disabled={busy !== ''} onclick={() => disable(plugin, true)}>Disable and purge</button>
+          <button class="sm" disabled={busy !== ''} onclick={() => disable(plugin, false)}>Disable</button>
+          <button class="quiet sm danger" disabled={busy !== ''} onclick={() => disable(plugin, true)}>Disable and purge</button>
         {/if}
       </div>
       {#if plugin.description}<p>{plugin.description}</p>{/if}
@@ -154,10 +162,10 @@
         >
           <p><strong>What {plugin.name} asks for.</strong> Untick what it should not have.</p>
           {#each plugin.asks as permission}
-            <label><input type="checkbox" bind:checked={given[permission]} /> <span class="mono">{permission}</span> <span class="soft">{means[permission] ?? ''}</span></label>
+            <label class="check"><input type="checkbox" bind:checked={given[permission]} /> <span class="mono">{permission}</span> <span class="soft">{means[permission] ?? ''}</span></label>
           {/each}
           {#if plugin.asks.length === 0}<p class="soft">It asks for nothing.</p>{/if}
-          <label><input type="checkbox" bind:checked={forClients} /> Run it in the directories connected to this server too, for whoever has it installed</label>
+          <label class="check"><input type="checkbox" bind:checked={forClients} /> Run it in the directories connected to this server too, for whoever has it installed</label>
           {#if plugin.adds.length > 0}<p class="soft">It adds: {plugin.adds.join('; ')}.</p>{/if}
           <div class="actions">
             <button class="primary" disabled={busy !== ''}>Enable {plugin.name}</button>
@@ -168,8 +176,8 @@
     </section>
   {/each}
 
-  <h2>In the registry</h2>
-  <p class="faint mono">{all.registry} · {all.platform}</p>
+  <h2 class="section-title">In the registry</h2>
+  <p class="faint mono where">{all.registry} · {all.platform}</p>
   {#if all.registry_error}
     <p class="error">{all.registry_error}</p>
   {:else if (all.listed ?? []).length === 0}
@@ -187,7 +195,7 @@
         {/if}
         <span class="grow"></span>
         {#if has.get(listed.name) !== listed.latest}
-          <button disabled={busy !== ''} onclick={() => change({ action: 'install', name: listed.name })}>
+          <button class="sm" disabled={busy !== ''} onclick={() => change({ action: 'install', name: listed.name })}>
             {has.has(listed.name) ? `Update to ${listed.latest}` : 'Install'}
           </button>
         {/if}
@@ -208,13 +216,16 @@
 <style>
   .elsewhere {
     margin-top: 16px;
+    font-size: 13px;
   }
-  h2 {
-    margin: 24px 0 8px;
+  .where {
+    margin: -4px 0 10px;
+    font-size: 12px;
   }
   .plugin {
-    padding: 12px 16px;
+    padding: 14px 16px;
     margin-bottom: 8px;
+    font-size: 13px;
   }
   .plugin p {
     margin: 6px 0 0;
@@ -227,14 +238,15 @@
   }
   .name {
     font-weight: 600;
-    font-size: 15px;
+    font-size: 13px;
   }
   .grow {
     flex: 1;
   }
   .said {
     padding: 12px 16px;
-    margin: 12px 0;
+    margin: 0 0 16px;
+    font-size: 13px;
   }
   .said p {
     margin: 0 0 4px;
@@ -242,13 +254,19 @@
   }
   .give {
     display: grid;
-    gap: 6px;
+    gap: 8px;
     margin-top: 12px;
     padding-top: 12px;
     border-top: 1px solid var(--line);
   }
   .give p {
     margin: 0;
+  }
+  .give .check {
+    align-items: flex-start;
+  }
+  .give .check input {
+    margin-top: 3px;
   }
   .actions {
     display: flex;

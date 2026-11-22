@@ -14,6 +14,8 @@
   import LaneWhy from './LaneWhy.svelte';
   import ReviewBar from './ReviewBar.svelte';
   import State from './State.svelte';
+  import Empty from './Empty.svelte';
+  import Loading from './Loading.svelte';
   import { loadDrafts, saveDrafts } from './review.js';
 
   // `tab`: which part is read; `at`: the file to go to in the changes.
@@ -222,7 +224,7 @@
 {:else if failed && info === null}
   <p class="error">{failed}</p>
 {:else if info === null}
-  <p class="soft">…</p>
+  <Loading lines={4} />
 {:else}
   <div class="head">
     <h1>{info.task?.startsWith('task#') ? (info.intent ?? info.task) : (info.task ?? info.intent ?? 'no intent said')}</h1>
@@ -288,12 +290,12 @@
         {#if sinceMine && since?.error}
           <p class="error">{since.error}</p>
         {:else if sinceMine && since && since.files.length === 0}
-          <div class="panel empty soft">Nothing changed since your review.</div>
+          <Empty title="Nothing changed since your review." />
         {:else if sinceMine && since}
           <p class="soft small">What changed since your verdict ({since.verdict}), against what you saw then.</p>
         {/if}
         {#if !sinceMine && diff.files.length === 0}
-          <div class="panel empty soft">This lane has changed nothing yet.</div>
+          <Empty title="This lane has changed nothing yet." />
         {/if}
         {#each shownFiles as file (`${sinceMine}-${file.path}`)}
           <FileDiff
@@ -417,28 +419,36 @@
     gap: 10px;
     flex-wrap: wrap;
   }
+  .head p {
+    margin: 0;
+    font-size: 13px;
+  }
   h1 {
     overflow-wrap: anywhere;
   }
   .sub {
-    margin: 6px 0 14px;
-    font-size: 14px;
+    margin: 4px 0 16px;
+    font-size: 13px;
   }
   .sub b {
     color: var(--ink);
-    font-weight: 600;
+    font-weight: 500;
   }
   .parts {
     display: flex;
     gap: 2px;
-    margin-bottom: 16px;
+    margin-bottom: 20px;
     border-bottom: 1px solid var(--line);
     overflow-x: auto;
   }
   .parts a {
-    padding: 8px 12px;
+    display: inline-flex;
+    align-items: center;
+    height: 38px;
+    padding: 0 10px;
     color: var(--soft);
-    font-size: 14px;
+    font-size: 13px;
+    font-weight: 500;
     white-space: nowrap;
     border-bottom: 2px solid transparent;
     margin-bottom: -1px;
@@ -449,28 +459,30 @@
   }
   .parts a[aria-current='page'] {
     color: var(--ink);
-    font-weight: 600;
     border-color: var(--accent);
   }
   .count {
+    display: inline-grid;
+    place-items: center;
+    min-width: 18px;
+    height: 18px;
     margin-left: 6px;
-    padding: 0 7px;
-    border: 1px solid var(--line);
+    padding: 0 5px;
     border-radius: 999px;
-    background: var(--panel);
-    font-size: 12px;
-    font-weight: 500;
+    background: var(--hover);
+    color: var(--soft);
+    font-size: 11px;
+    font-weight: 600;
     font-variant-numeric: tabular-nums;
   }
   .count.bad {
     background: var(--bad-bg);
     color: var(--bad);
-    border-color: transparent;
   }
   .columns {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 300px;
-    gap: 20px;
+    gap: 24px;
     align-items: start;
   }
   @media (max-width: 900px) {
@@ -480,7 +492,7 @@
   }
   .main {
     display: grid;
-    gap: 14px;
+    gap: 16px;
     min-width: 0;
   }
   aside {
@@ -488,15 +500,9 @@
     gap: 12px;
   }
   .box {
-    padding: 12px 16px;
+    padding: 14px 16px;
     display: grid;
-    gap: 6px;
-  }
-  .box h2 {
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--faint);
+    gap: 8px;
   }
   .box p {
     margin: 0;
@@ -513,17 +519,9 @@
   .item {
     overflow-wrap: anywhere;
   }
-  .notice {
-    margin: 0;
-    padding: 8px 14px;
-    border-radius: 8px;
-    background: var(--warn-bg);
-    color: var(--warn);
-    font-size: 14px;
-  }
   .summary {
     margin: 0;
-    font-size: 14px;
+    font-size: 13px;
   }
   .summary-row {
     display: flex;
@@ -531,23 +529,6 @@
     align-items: center;
     flex-wrap: wrap;
     justify-content: space-between;
-  }
-  .seg {
-    display: inline-flex;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    overflow: hidden;
-  }
-  .seg button {
-    border: 0;
-    border-radius: 0;
-    background: var(--panel);
-    font-size: 13px;
-    padding: 4px 10px;
-  }
-  .seg button[aria-pressed='true'] {
-    background: var(--accent);
-    color: var(--accent-ink);
   }
   .plus {
     color: var(--added-ink);
@@ -557,17 +538,15 @@
     color: var(--removed-ink);
     font-family: var(--mono);
   }
-  .empty {
-    padding: 20px;
-  }
   .gone {
     padding: 16px 20px;
     max-width: 720px;
+    font-size: 13px;
   }
   .gone p {
     margin: 0 0 6px;
   }
-  .error {
-    margin: 0 0 12px;
+  .gone p:last-child {
+    margin: 0;
   }
 </style>

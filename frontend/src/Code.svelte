@@ -4,6 +4,8 @@
   // last written for, and on the right what that reason was. Earlier work
   // is found by the words of its reason.
   import { ago, ask, fileText, laneLink, whyLink } from './api.js';
+  import Empty from './Empty.svelte';
+  import Loading from './Loading.svelte';
 
   // `file`: the one that is read (none: pick one). `lane`: as that lane
   // has it, instead of the main lane.
@@ -99,14 +101,14 @@
         search();
       }}
     >
-      <input bind:value={words} placeholder="Find work by its reason: cents, task #7" aria-label="Words of a reason" />
-      <button disabled={searching || words.trim() === ''}>Find</button>
+      <input class="sm" bind:value={words} placeholder="Find work by its reason: cents, task #7" aria-label="Words of a reason" />
+      <button class="sm" disabled={searching || words.trim() === ''}>Find</button>
     </form>
     {#if found !== null}
       <div class="found">
         <p class="faint head">
           {found.length === 0 ? 'No reason has those words.' : `${found.length} ${found.length === 1 ? 'reason' : 'reasons'}`}
-          <button class="quiet" onclick={() => (found = null)}>Clear</button>
+          <button class="quiet sm" onclick={() => (found = null)}>Clear</button>
         </p>
         {#each found as hit}
           <article>
@@ -125,7 +127,7 @@
       </div>
     {/if}
     {#if files === null && !failed}
-      <p class="soft pad">…</p>
+      <Loading inset lines={5} />
     {:else if files?.length === 0}
       <p class="soft pad">{lane ? 'This lane' : 'The main lane'} has no file yet.</p>
     {:else}
@@ -145,12 +147,11 @@
   <div class="panel file">
     {#if failed}<p class="error">{failed}</p>{/if}
     {#if !file}
-      <div class="pick">
-        <p>Pick a file to read it with its reasons.</p>
-        <p class="soft">Beside each line, a stripe says which reason it was last written for. Point at a line to read it.</p>
-      </div>
+      <Empty inset title="Pick a file to read it with its reasons.">
+        Beside each line, a stripe says which reason it was last written for. Point at a line to read it.
+      </Empty>
     {:else if graph === null && !failed}
-      <p class="soft pad">…</p>
+      <Loading inset lines={6} />
     {:else if graph}
       <header>
         <b class="mono">{file}</b>
@@ -169,7 +170,7 @@
             {@const n = index + 1}
             {@const reason = reasonOf.get(n)}
             <button
-              class="row"
+              class="bare row"
               class:asked={line === n}
               class:dim={shown !== null && reason !== shown}
               style={reason === undefined ? '' : `--stripe:${edge(reason)};--wash:${tint(reason)}`}
@@ -215,7 +216,7 @@
         <h2>{asked || line !== null ? 'Every reason of the file' : 'Reasons'}</h2>
         {#each reasons as reason, index}
           <button
-            class="reason"
+            class="bare reason"
             aria-pressed={shown === index}
             onclick={() => ((shown = shown === index ? null : index), (line = null))}
             style={`--stripe:${edge(index)}`}
@@ -290,21 +291,6 @@
   }
   input {
     flex: 1;
-    min-width: 0;
-    padding: 5px 8px;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    background: var(--panel);
-    color: var(--ink);
-    font: inherit;
-  }
-  input:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
-  form button {
-    padding: 4px 10px;
-    font-size: 13px;
   }
   .found {
     padding: 0 12px 8px;
@@ -365,12 +351,6 @@
     overflow: hidden;
     min-width: 0;
   }
-  .pick {
-    padding: 28px 24px;
-  }
-  .pick p {
-    margin: 0 0 6px;
-  }
   header {
     display: flex;
     gap: 10px;
@@ -429,12 +409,6 @@
     display: grid;
     gap: 6px;
   }
-  .box h2 {
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--faint);
-  }
   .box p {
     margin: 0;
     overflow-wrap: anywhere;
@@ -448,10 +422,11 @@
     grid-template-columns: 5px 1fr;
     gap: 8px;
     padding: 4px 6px 4px 0;
-    border: 0;
     border-radius: 4px;
-    background: none;
-    text-align: left;
+    cursor: pointer;
+  }
+  .reason:hover {
+    background: var(--hover);
   }
   .reason[aria-pressed='true'] {
     background: var(--bg);
@@ -460,8 +435,8 @@
     display: block;
   }
   .why2 {
-    font-size: 14px;
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: 500;
     overflow-wrap: anywhere;
   }
   .error {

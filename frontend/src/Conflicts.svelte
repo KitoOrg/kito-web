@@ -156,6 +156,9 @@
   details pre {
     margin-top: 4px;
   }
+  header h2 {
+    font-size: 14px;
+  }
   textarea {
     margin-top: 10px;
     min-height: 140px;

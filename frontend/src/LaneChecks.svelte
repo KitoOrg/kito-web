@@ -56,7 +56,7 @@
   }
   .text {
     margin: 2px 0 0;
-    font-size: 14px;
+    font-size: 13px;
     overflow-wrap: anywhere;
   }
   .commands {

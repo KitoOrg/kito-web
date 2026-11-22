@@ -48,7 +48,7 @@
         {#if comment.quoted}<pre class="was">{comment.quoted}</pre>{/if}
         <pre class="now">{comment.suggestion}</pre>
         {#if !comment.resolved_by && !comment.outdated && mayWrite}
-          <button class="primary" disabled={busy} onclick={apply}>Apply it</button>
+          <button class="primary sm" disabled={busy} onclick={apply}>Apply it</button>
         {/if}
       </div>
     {/if}
@@ -72,14 +72,14 @@
       >
         <textarea bind:value={text} placeholder="Answer…" aria-label={`Answer ${comment.id}`} use:focus></textarea>
         <div class="actions">
-          <button class="primary" disabled={busy || text.trim().length < 2}>Answer</button>
-          <button type="button" onclick={() => (answering = false)}>Cancel</button>
+          <button class="primary sm" disabled={busy || text.trim().length < 2}>Answer</button>
+          <button class="sm" type="button" onclick={() => (answering = false)}>Cancel</button>
         </div>
       </form>
     {:else}
       <div class="actions">
-        <button class="quiet" onclick={() => (answering = true)}>Answer</button>
-        <button class="quiet" disabled={busy} onclick={resolve}>Resolve</button>
+        <button class="quiet sm" onclick={() => (answering = true)}>Answer</button>
+        <button class="quiet sm" disabled={busy} onclick={resolve}>Resolve</button>
       </div>
     {/if}
   {/if}
@@ -91,9 +91,9 @@
     border: 1px solid var(--line);
     border-radius: 8px;
     background: var(--panel);
-    padding: 10px 14px;
+    padding: 12px 16px;
     font-family: var(--sans);
-    font-size: 14px;
+    font-size: 13px;
     white-space: normal;
   }
   .thread.resolved {
@@ -159,7 +159,10 @@
   .actions {
     display: flex;
     gap: 6px;
-    margin-top: 8px;
+    margin: 8px -8px 0;
+  }
+  form .actions {
+    margin-inline: 0;
   }
   .error {
     margin: 8px 0 0;
