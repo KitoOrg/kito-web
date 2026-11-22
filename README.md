@@ -8,7 +8,7 @@ Kito: it asks the repository's daemon what `kito` asks, through the
 daemon's API (version 1, `docs/api.md` in Kito), within the permissions
 the repository gives it. Nothing of Kito is linked into it.
 
-## What it does (0.11)
+## What it does (0.12)
 
 - **The lanes** of a repository, as a list: where each stands, whose it
   is, what it declared, which other lanes are on the same code. The
@@ -126,6 +126,19 @@ kito-server serve --http 0.0.0.0:7443     # https://<the server>:7443/
   `kito connect` line to pass on, or by who they are for a way to sign in
   that the server offers. Admins and owners are named by owners. A
   change counts at once, in the connections that are open.
+- **Instructions** (Kito 0.32): what the assistants are told, each file
+  with where it comes from (the kitchen, the repository, or the
+  repository over the kitchen), and what Claude Code, Codex or ZCode
+  reads, Kito's rules first. Whoever may write edits the repository's
+  own, with a rendered preview; overrides a kitchen file, or stops it
+  being told; and puts back an earlier text from the list of changes.
+  The kitchen's own files are changed in the kitchen, through a lane:
+  the page links there.
+- **Settings**, for a repository's maintainers and the server's admins
+  (Kito 0.31): protection, approvals, the git remote, the kitchen; the
+  checks, which run commands on the server's machine, for its admins
+  only. Under each, who changed it last and to what. The plugin asks
+  for `admin` for this page: enabled without it, the page says so.
 - **The server's plugins**, for its admins (`kito-server user role
   <name> admin`, on the server's machine): what is installed and what
   each was given, what the registry lists, and install, enable, disable

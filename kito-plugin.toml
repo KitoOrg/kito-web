@@ -1,5 +1,5 @@
 name = "web"
-version = "0.11.0"
+version = "0.12.0"
 description = "Kito in a browser: lanes and their review, why code is the way it is, the log, notes"
 api = 1
 # It reads the repository; writes comments, verdicts and notes, opens and
@@ -9,8 +9,9 @@ api = 1
 #
 # On a Kito server, `pages` lets it serve the same client at the server's
 # address, to whoever signs in there: what it may ask of a repository is
-# then held both to these and to what the person may do.
-permissions = ["read", "write", "integrate", "pages"]
+# then held both to these and to what the person may do. `admin` is for
+# the Settings page: a repository's rules, for its maintainers.
+permissions = ["read", "write", "integrate", "admin", "pages"]
 
 [pages]
 mount = "/"

@@ -5,11 +5,13 @@
   import Board from './Board.svelte';
   import Code from './Code.svelte';
   import Home from './Home.svelte';
+  import Instructions from './Instructions.svelte';
   import Lane from './Lane.svelte';
   import Log from './Log.svelte';
   import Logo from './Logo.svelte';
   import Notes from './Notes.svelte';
   import People from './People.svelte';
+  import Settings from './Settings.svelte';
   import SignIn from './SignIn.svelte';
   import Why from './Why.svelte';
 
@@ -105,7 +107,7 @@
     if (name === 'why' && rest.length > 0) {
       return { name: 'why', target: decodeURIComponent(rest.join('/')), lane: asked.get('lane') };
     }
-    if (['why', 'log', 'notes', 'admin', 'people'].includes(name)) return { name };
+    if (['why', 'log', 'notes', 'admin', 'people', 'settings', 'instructions'].includes(name)) return { name };
     return { name: 'lanes' };
   });
   // The part of the client a page belongs to.
@@ -123,7 +125,8 @@
     ['why', '#/why', 'Code and why'],
     ['log', '#/log', 'Log'],
     ['notes', '#/notes', 'Notes'],
-    ...(about?.team && mayManage ? [['people', '#/people', 'People']] : []),
+    ['instructions', '#/instructions', 'Instructions'],
+    ...(about?.team && mayManage ? [['people', '#/people', 'People'], ['settings', '#/settings', 'Settings']] : []),
   ]);
 </script>
 
@@ -223,6 +226,14 @@
     <!-- The files, and one of them read with its reasons. -->
     {#key `${page.target ?? ''} ${page.lane ?? ''}`}
       <Code file={page.target ?? null} lane={page.lane ?? null} />
+    {/key}
+  {:else if page.name === 'instructions'}
+    {#key repo}
+      <Instructions {repo} {who} {role} />
+    {/key}
+  {:else if page.name === 'settings' && about.team && mayManage}
+    {#key repo}
+      <Settings {repo} {who} />
     {/key}
   {:else if page.name === 'people' && about.team && mayManage}
     {#key repo}

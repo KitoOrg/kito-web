@@ -296,7 +296,7 @@ fn a_kito_server_serves_it_to_whoever_signs_in() {
     ok(&["plugin", "add", "--path", plugin.to_str().unwrap()]);
     let enabled = ok(&["plugin", "enable", "web"]);
     assert!(
-        enabled.contains("It may: read, write, integrate, pages.")
+        enabled.contains("It may: read, write, integrate, admin, pages.")
             && enabled.contains("pages under /"),
         "{enabled}"
     );
@@ -455,6 +455,43 @@ fn a_kito_server_serves_it_to_whoever_signs_in() {
     );
     assert_eq!(people(&carol, "server.people", json!({})).status, 403);
     assert_eq!(members(&carol).status, 403);
+
+    // What the assistants are told: written by one who may write, read by
+    // one who may only read, with who changed it.
+    let call = |cookie: &str, method: &str, params: Value| {
+        let call = json!({ "method": method, "params": params });
+        request(
+            &http,
+            "POST",
+            "/-/api/shop",
+            &[("Cookie", cookie), ("X-Kito", "1")],
+            Some(&call),
+        )
+    };
+    let set = call(
+        &ada,
+        "instructions_set",
+        json!({ "name": "money", "text": "Whole cents." }),
+    );
+    assert_eq!(set.status, 200, "{}", set.body);
+    let read = call(&carol, "instructions_text", json!({ "assistant": "codex" })).json();
+    assert!(
+        read["text"].as_str().unwrap().contains("Whole cents."),
+        "{read}"
+    );
+    assert_eq!(
+        call(&carol, "instructions_history", json!({})).json()[0]["by"],
+        "ada"
+    );
+    assert_eq!(
+        call(
+            &carol,
+            "instructions_set",
+            json!({ "name": "x", "text": "no" })
+        )
+        .status,
+        403
+    );
 
     // What the client asks of a repository, the server answers as the
     // person: everything this plugin was given for ada, reading for carol.

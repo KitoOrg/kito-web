@@ -479,9 +479,14 @@ fn the_client_reads_and_writes_what_the_plugin_was_given() {
             refused.body
         );
     }
-    assert!(served
-        .ok(&["status"])
-        .contains("Plugin ............ web 0.10.0 (read, write, integrate)"));
+    let status = served.ok(&["status"]);
+    assert!(
+        status.contains(&format!(
+            "Plugin ............ web {} (read, write, integrate",
+            env!("CARGO_PKG_VERSION")
+        )),
+        "{status}"
+    );
 }
 
 #[test]
