@@ -172,6 +172,32 @@
 </section>
 
 <style>
+  /* As the other settings are. */
+  .setting {
+    display: grid;
+    gap: 8px;
+    justify-items: start;
+    padding: 16px;
+    margin: 0 0 12px;
+    max-width: 720px;
+  }
+  .setting > * {
+    margin: 0;
+  }
+  .setting p {
+    font-size: 13px;
+  }
+  .head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .head h2 {
+    margin: 0;
+  }
+  .controls input {
+    min-width: 240px;
+  }
   .fields {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
