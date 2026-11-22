@@ -73,6 +73,12 @@
 
   let installed = $derived(all?.installed ?? []);
   let has = $derived(new Map(installed.filter((plugin) => plugin.installed).map((plugin) => [plugin.name, plugin.version])));
+
+  // Where each runs (Kito 0.36.1): a plugin for the machines people work
+  // on is not offered here. One the registry says nothing of is.
+  const runsHere = (listed) => !listed.runs?.length || listed.runs.includes('server');
+  let forServer = $derived((all?.listed ?? []).filter(runsHere));
+  let forPeople = $derived((all?.listed ?? []).filter((listed) => !runsHere(listed)));
 </script>
 
 <h1>Plugins of this server</h1>
@@ -92,9 +98,6 @@
     {/each}
     {#if done.from}
       <p class="faint mono">from {done.from.url} · SHA-256 {done.from.sha256}</p>
-    {/if}
-    {#if done.restart}
-      <p class="chip warn">takes effect when the server starts again</p>
     {/if}
   </div>
 {/if}
@@ -172,7 +175,7 @@
   {:else if (all.listed ?? []).length === 0}
     <p class="soft">The registry lists no plugin yet.</p>
   {/if}
-  {#each all.listed ?? [] as listed (listed.name)}
+  {#each forServer as listed (listed.name)}
     <section class="panel plugin">
       <div class="head">
         <span class="name mono">{listed.name}</span>
@@ -192,9 +195,20 @@
       <p>{listed.about}</p>
     </section>
   {/each}
+  {#if forPeople.length > 0}
+    <p class="soft elsewhere">
+      Not for a server: {#each forPeople as listed, i}<span class="mono">{listed.name}</span>{i < forPeople.length - 1
+          ? ', '
+          : ''}{/each}. They set up a coding assistant, or work in a repository, on the machines people work on:
+      <code>kito plugin add &lt;name&gt;</code> there.
+    </p>
+  {/if}
 {/if}
 
 <style>
+  .elsewhere {
+    margin-top: 16px;
+  }
   h2 {
     margin: 24px 0 8px;
   }

@@ -19,6 +19,10 @@
   let kitchen = $state('');
 
   const admin = $derived(Boolean(who?.admin));
+  // The plugins that run on this server (Kito 0.36.2); a server that does
+  // not say is taken to run them all.
+  const running = (name) => who?.plugins === undefined || who.plugins.includes(name);
+  const plugins = $derived(who?.plugins ?? []);
   const kitchens = $derived((who?.repos ?? []).map((one) => one.name).filter((name) => name !== repo));
 
   async function load() {
@@ -82,10 +86,8 @@
   {/each}
 {/snippet}
 
-<h1>Rules of {repo}</h1>
-<p class="soft">
-  What every lane meets before it goes in. A change counts for the next integration; the server keeps who made it.
-</p>
+<h1>Settings of {repo}</h1>
+<p class="soft">A change counts for the next integration; the server keeps who made it.</p>
 
 {#if failed}<p class="error" role="alert">{failed}</p>{/if}
 {#if saved}<p class="chip ok" role="status">{saved} saved</p>{/if}
@@ -93,6 +95,8 @@
 {#if now === null && !failed}
   <p class="soft">…</p>
 {:else if now}
+  <h2 class="group">Rules</h2>
+  <p class="soft group-about">What every lane meets before it goes in.</p>
   <section class="panel setting">
     <div class="head">
       <h2>Protection</h2>
@@ -146,8 +150,21 @@
     {@render changes('push')}
   </section>
 
+  <h2 class="group">Plugins</h2>
+  <p class="soft group-about">
+    {#if plugins.length > 0}
+      Running on this server: {#each plugins as name, i}<span class="mono">{name}</span>{i < plugins.length - 1 ? ', ' : ''}{/each}.
+      What each sets for this repository is here; what they set for the whole server is on the Plugins page{admin
+        ? ''
+        : ', for admins'}.
+    {:else if who?.plugins !== undefined}
+      No plugin runs on this server.{#if admin} The Plugins page adds them.{/if}
+    {/if}
+  </p>
+
+  {#if running('kitchen')}
   <section class="panel setting">
-    <h2>Kitchen</h2>
+    <div class="head"><h2>Kitchen</h2><span class="chip">kitchen</span></div>
     <p class="soft">
       Another repository of this server whose instructions every assistant here gets first; this repository's own
       instructions win.
@@ -162,9 +179,29 @@
     </div>
     {@render changes('kitchen')}
   </section>
+  {:else if now.kitchen}
+    <p class="faint">
+      This repository names the kitchen <span class="mono">{shown(now.kitchen)}</span>, and the kitchen plugin does not
+      run on this server: its instructions are not given.
+    </p>
+  {:else if plugins.length > 0}
+    <p class="faint">None of them has settings for a repository.</p>
+  {/if}
 {/if}
 
 <style>
+  .group {
+    margin: 28px 0 0;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--soft);
+  }
+  .group-about {
+    margin: 4px 0 0;
+    max-width: 720px;
+  }
   .setting {
     padding: 12px 16px;
     margin: 12px 0;

@@ -26,11 +26,22 @@
   let route = $state(location.hash);
   // On a phone, what does not fit the bar is behind a menu button.
   let menu = $state(false);
+  // The server's own pages, for its admins, and the account: each behind
+  // one button of the bar.
+  let drop = $state('');
+  $effect(() => {
+    const away = (event) => {
+      if (!event.target.closest?.('.dropper')) drop = '';
+    };
+    addEventListener('click', away);
+    return () => removeEventListener('click', away);
+  });
 
   $effect(() => {
     const moved = () => {
       route = location.hash;
       menu = false;
+      drop = '';
       scrollTo(0, 0);
     };
     addEventListener('hashchange', moved);
@@ -188,14 +199,32 @@
   {/if}
   {#if about?.team && who}
     {#if who.admin}
-      <a class="link" href={`${home}#/people`} aria-current={!repo && page.name === 'people' ? 'page' : undefined}>People</a>
-      <a class="link" href={`${home}#/repositories`} aria-current={page.name === 'repositories' ? 'page' : undefined}>Repositories</a>
-      <a class="link" href="#/admin" aria-current={page.name === 'admin' ? 'page' : undefined}>Plugins</a>
-      <a class="link" href={`${home}#/audit`} aria-current={page.name === 'audit' ? 'page' : undefined}>Audit</a>
-      <a class="link" href={`${home}#/backups`} aria-current={page.name === 'backups' ? 'page' : undefined}>Backups</a>
+      {@const serverPage = ['people', 'repositories', 'admin', 'audit', 'backups'].includes(page.name) && !(page.name === 'people' && repo)}
+      <div class="dropper">
+        <button
+          class="link toggle"
+          aria-expanded={drop === 'server'}
+          aria-current={serverPage ? 'page' : undefined}
+          onclick={() => (drop = drop === 'server' ? '' : 'server')}>Server <span class="caret">▾</span></button
+        >
+        <div class="drop" class:shown={drop === 'server'}>
+          <a href={`${home}#/people`} aria-current={!repo && page.name === 'people' ? 'page' : undefined}>People</a>
+          <a href={`${home}#/repositories`} aria-current={page.name === 'repositories' ? 'page' : undefined}>Repositories</a>
+          <a href="#/admin" aria-current={page.name === 'admin' ? 'page' : undefined}>Plugins</a>
+          <a href={`${home}#/audit`} aria-current={page.name === 'audit' ? 'page' : undefined}>Audit log</a>
+          <a href={`${home}#/backups`} aria-current={page.name === 'backups' ? 'page' : undefined}>Backups</a>
+        </div>
+      </div>
     {/if}
-    <span class="who" title="Signed in">{who.user}</span>
-    <button class="out" onclick={leave}>Sign out</button>
+    <div class="dropper">
+      <button class="who" title="Signed in" aria-expanded={drop === 'me'} onclick={() => (drop = drop === 'me' ? '' : 'me')}
+        >{who.user}</button
+      >
+      <div class="drop right" class:shown={drop === 'me'}>
+        <span class="faint">Signed in as <b>{who.user}</b>{who.role ? ` · ${who.role}` : ''}</span>
+        <button class="out" onclick={leave}>Sign out</button>
+      </div>
+    </div>
   {:else if about?.kito}
     <span class="version">Kito {about.kito} · web {about.version}</span>
   {/if}
@@ -415,7 +444,76 @@
     color: var(--accent-ink);
     font-variant-numeric: tabular-nums;
   }
+  .dropper {
+    position: relative;
+  }
+  .toggle {
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .caret {
+    font-size: 10px;
+    opacity: 0.7;
+  }
+  .drop {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    min-width: 180px;
+    flex-direction: column;
+    padding: 6px;
+    background: var(--panel);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25);
+    z-index: 30;
+  }
+  .drop.right {
+    left: auto;
+    right: 0;
+  }
+  .drop.shown {
+    display: flex;
+  }
+  .drop a {
+    padding: 7px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--ink);
+  }
+  .drop a:hover {
+    background: var(--bg);
+    text-decoration: none;
+  }
+  .drop a[aria-current='page'] {
+    font-weight: 600;
+    color: var(--accent);
+  }
+  .drop > span {
+    padding: 7px 10px;
+    font-size: 12px;
+  }
+  .drop .out {
+    color: var(--ink);
+    text-align: left;
+    padding: 7px 10px;
+    border-radius: 6px;
+    opacity: 1;
+  }
+  .drop .out:hover {
+    background: var(--bg);
+  }
   .who {
+    border: 0;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
     display: inline-grid;
     place-items: center;
     min-width: 26px;
@@ -557,6 +655,25 @@
     }
     .more.open .out {
       text-align: left;
+      font-size: 15px;
+      padding: 10px;
+    }
+    .more.open .toggle,
+    .more.open .who {
+      display: none;
+    }
+    .more.open .drop {
+      display: flex;
+      position: static;
+      background: none;
+      border: 0;
+      box-shadow: none;
+      padding: 0;
+      color: inherit;
+    }
+    .more.open .drop a,
+    .more.open .drop .out {
+      color: inherit;
       font-size: 15px;
       padding: 10px;
     }
