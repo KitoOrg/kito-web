@@ -222,7 +222,7 @@
   const saveHint = $derived(
     progress ||
       (mayIntegrateIn(k)
-        ? 'A lane is opened for it, then integrated: the kitchen is what its main lane has.'
+        ? 'A lane is opened for it, then integrated.'
         : 'A lane is opened for it; somebody who may integrate integrates it.'),
   );
 
@@ -261,41 +261,16 @@
 </script>
 
 {#if !k}
-  <PageHead title="Kitchens">
-    {#snippet lead()}
-      What a team shares to work on its repositories: how its agents behave, what its words mean, how things are done
-      here. A kitchen is a repository of this server with a <code>kitchen.toml</code>; the repositories that use it give
-      its instructions to every assistant.
-    {/snippet}
-  </PageHead>
+  <PageHead title="Kitchens" docs="kitchens" />
 
   <Err message={failed} />
 
   <div class="stack">
-    {#if admin}
-      <details class="panel pad start">
-        <summary>How a kitchen is started</summary>
-        <div class="box">
-          <p class="soft">
-            A kitchen starts as files on a machine, then becomes a repository of this server. On the server’s machine:
-          </p>
-          <pre>kito-server kitchen new ./kitchen "Our team"
-kito-server repo add kitchen --from &lt;a git repository of it&gt;</pre>
-          <p class="soft">
-            Or from a connected directory holding those files: <code>kito repos add kitchen --push ./kitchen</code>. It
-            shows here as soon as its main lane has a <code>kitchen.toml</code>.
-          </p>
-        </div>
-      </details>
-    {/if}
 
     {#if kitchens === null}
       {#if !failed}<Loading lines={3} />{/if}
     {:else if kitchens.length === 0}
-      <Empty title="No kitchen yet">
-        None of the repositories you may read has a <code>kitchen.toml</code>, and none uses a kitchen. An admin of this
-        server starts one.
-      </Empty>
+      <Empty title="No kitchen yet">An admin of this server starts one.</Empty>
     {:else}
       <div>
         <div class="cards">
@@ -307,7 +282,6 @@ kito-server repo add kitchen --from &lt;a git repository of it&gt;</pre>
             {/if}
           {/each}
         </div>
-        <p class="footnote">Only the repositories you may read are looked at.</p>
       </div>
     {/if}
   </div>
@@ -318,7 +292,7 @@ kito-server repo add kitchen --from &lt;a git repository of it&gt;</pre>
   <PageHead title={k} back={toList} />
   <Empty title="No such kitchen for you">It is not a repository of this server you may read.</Empty>
 {:else}
-  <PageHead title={kitchen.title} back={toList}>
+  <PageHead title={kitchen.title} back={toList} docs="kitchens">
     {#snippet lead()}
       {kitchen.about || 'A kitchen of this server'}{#if kitchen.title !== k}&nbsp;· the repository {k}{/if} · you may {may}
     {/snippet}
@@ -329,10 +303,7 @@ kito-server repo add kitchen --from &lt;a git repository of it&gt;</pre>
 
   <Err message={failed} />
   {#if !kitchen.marked}
-    <p class="notice">
-      This repository has no <code>kitchen.toml</code>: the repositories that use it are given its
-      <code>instructions/</code>, and the kitchen plugin finds no behaviour, concepts or recipes in it.
-    </p>
+    <p class="notice">It has no <code>kitchen.toml</code>: only its instructions are given.</p>
   {/if}
   <Err message={filesFailed} />
 
@@ -404,13 +375,12 @@ kito-server repo add kitchen --from &lt;a git repository of it&gt;</pre>
                 <label class="field">
                   <span>Why</span>
                   <input bind:value={why} placeholder={`${open?.fresh ? 'Write' : 'Change'} ${open?.path} of the kitchen`} />
-                  <span class="hint">What the lane is for, and what the log will say.</span>
                 </label>
               {/snippet}
             </Editor>
           {/key}
         {:else}
-          <Empty title="Pick a part of the kitchen">Its behaviour, a concept, a recipe, a tool or an instruction.</Empty>
+          <Empty title="Pick a part of the kitchen" />
         {/if}
         {#if waits}
           <div class="result" role="status">
@@ -470,20 +440,12 @@ kito-server repo add kitchen --from &lt;a git repository of it&gt;</pre>
           </tbody>
         </table>
       </div>
-      <p class="footnote">
-        An earlier text is not shown here yet: to put one back, edit the file again, or work in a lane of {k} from a
-        connected directory.
-      </p>
     {/if}
   {/if}
 
   <h2 class="section-title">Repositories that use it</h2>
-  <p class="section-lead">
-    A repository that uses a kitchen gives the kitchen’s instructions to every assistant, before its own. Its
-    maintainers say which it uses: this sets <code>kitchen</code> in its configuration.
-  </p>
   {#if others.length === 0}
-    <Empty title="No other repository">There is no other repository you may read that could use it.</Empty>
+    <Empty title="No other repository" />
   {:else}
     <div class="stack">
       <div class="panel table-wrap">
@@ -525,12 +487,9 @@ kito-server repo add kitchen --from &lt;a git repository of it&gt;</pre>
           <button class="primary" disabled={choosing || changes.length === 0} onclick={saveChoice}>{choosing ? 'Saving…' : 'Save'}</button>
         </div>
         <Err message={choiceFailed} />
-        <p class="hint">
-          A repository that is checked uses this kitchen; one that is unchecked uses the standard one again.
-          {#if changes.some((one) => one.uses && one.uses !== k && chosen[one.name])}
-            A repository that had another kitchen leaves it for this one.
-          {/if}
-        </p>
+        {#if changes.some((one) => one.uses && one.uses !== k && chosen[one.name])}
+          <p class="hint">A repository that had another kitchen leaves it for this one.</p>
+        {/if}
       </div>
     </div>
   {/if}
@@ -555,10 +514,6 @@ kito-server repo add kitchen --from &lt;a git repository of it&gt;</pre>
 {/snippet}
 
 <style>
-  /* Its commands scroll inside it: a long one never makes it wider than the page. */
-  .start {
-    min-width: 0;
-  }
   /* The column of what is checked: as wide as the box in it. */
   .tick {
     width: 36px;

@@ -101,7 +101,7 @@
   );
 </script>
 
-<SettingCard title="GitHub" about="Links this repository to one at GitHub: its code both ways, its issues as tasks.">
+<SettingCard title="GitHub" about="Code both ways, issues as tasks.">
   {#snippet state()}
     {#if now?.link?.last_error}
       <span class="chip bad">sync failed</span>
@@ -163,7 +163,6 @@
       </div>
       <Err message={choicesFailed} />
       <p class="hint">
-        The server’s GitHub App reaches only the repositories it is installed on.
         <a href={now.app.install} target="_blank" rel="noreferrer">Install the app on more repositories <Icon name="external" /></a>
       </p>
       <label class="check"><input type="checkbox" bind:checked={code} /> Code, both ways</label>
@@ -189,12 +188,8 @@
         {/if}
       </div>
       <Err message={wrong} />
-      <p class="hint">
-        Webhooks sync at once, and the server checks every five minutes. GitHub’s commits are integrated through a lane, checked
-        like any other; a real conflict waits in that lane for a decision.
-      </p>
     {:else}
-      <p class="hint">Only maintainers of this repository change the link.</p>
+      <p class="hint">Only maintainers change it.</p>
     {/if}
   {/if}
   <Err message={failed} />

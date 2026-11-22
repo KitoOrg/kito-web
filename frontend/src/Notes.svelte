@@ -67,7 +67,7 @@
   <button class="primary" disabled={adding} onclick={() => (adding = true)}>Add note</button>
 {/snippet}
 
-<PageHead title="Notes" lead="What whoever changes some code must know, and no change of the code says." actions={may ? adder : null} />
+<PageHead title="Notes" docs="notes" actions={may ? adder : null} />
 
 {#if adding}
   <form
@@ -81,15 +81,11 @@
     <label class="field">
       <span>On</span>
       <input class="mono" bind:value={on} placeholder="src/billing.ts:invoice" use:focus />
-      <span class="hint">
-        A function, a file, a directory (<code>src/billing/</code>) or a line of a file (<code>src/billing.ts:12</code>), which stands
-        for the function it is in.
-      </span>
+      <span class="hint">A function, a file, a directory, or a line of a file.</span>
     </label>
     <label class="field">
       <span>Note</span>
       <textarea bind:value={text} placeholder="Called by the nightly billing job, outside this repository: do not rename."></textarea>
-      <span class="hint">It is told with the why of that code, and to an agent before it changes it.</span>
     </label>
     <div class="controls">
       <button class="primary" disabled={busy || on.trim() === '' || text.trim() === ''}>{busy ? 'Adding…' : 'Add'}</button>
@@ -104,7 +100,7 @@
 {:else if notes === null}
   <Loading />
 {:else if notes.length === 0}
-  <Empty title="No notes yet">A note is told with the why of the code it is on, and to an agent before it changes that code.</Empty>
+  <Empty title="No notes yet" />
 {:else}
   <ul class="panel rows">
     {#each notes as note (note.id)}

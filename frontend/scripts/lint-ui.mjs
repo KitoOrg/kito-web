@@ -30,7 +30,7 @@ const BREAKPOINTS = ['640', '900'];
 const BREAKPOINTS_OF = { 'App.svelte': ['760'] }; // where the top bar folds
 // The classes of app.css a component uses as they are, and never restyles.
 const SHARED = new Set(
-  `small soft faint none grow said rendered code plus minus wrap page-head lead section-title section-lead footnote
+  `small soft faint none grow said rendered code plus minus wrap page-head lead section-title footnote
    narrow stack cols button check field hint fields controls filters form seg subtabs panel pad panel-head box setting
    kv rows row row-body row-title row-meta row-side table-wrap chip tag count ref ring sr error notice result mono
    primary quiet danger sm icon bare section-head panel-foot cards tight groups flush`.split(/\s+/),
@@ -200,6 +200,12 @@ for (const name of names) {
   if (name !== 'PageHead.svelte') each(markup, /<h1\b/g, 'heading', 'the title of a page is <PageHead title>');
   each(markup, /<h[56]\b/g, 'heading', 'h2.section-title, h3 (a card), h4 (a group): nothing deeper');
   if (name !== 'Err.svelte') each(markup, /\bclass="[^"]*\berror\b[^"]*"/g, 'error', 'an error is <Err message={…} />, under what caused it');
+  // A page says little: what it is for is in the documentation (`docs="…"` on PageHead).
+  each(markup, /<PageHead\b[^>]*?\slead=["`]/g, 'words', 'a page has no subtitle: `lead` is for the facts of the thing shown (a snippet); point to the documentation with docs="…"');
+  for (const hit of markup.matchAll(/<(p|span)\b[^>]*\bclass="(?:hint|footnote)[^"]*"[^>]*>([\s\S]*?)<\/\1>|\babout="([^"]*)"/g)) {
+    const said = (hit[2] ?? hit[3] ?? '').replace(/<[^>]*>|\{[^}]*\}/g, ' ').replace(/\s+/g, ' ').trim();
+    if (said.length > 90) tell(hit.index, 'words', `"${said.slice(0, 40)}…" is ${said.length} letters: a hint is a few words, the rest is in the documentation`);
+  }
   each(markup, /\sstyle="/g, 'inline-style', 'a class of app.css, or a style:property directive for a value that is worked out');
   if (!TITLE_OK.includes(name)) each(markup, /<[a-z][\w-]*\b[^>]*?\stitle=/g, 'title', 'nothing is said only in a title attribute: say it on the page (.hint)');
   each(markup, /<button\b[^>]*\bclass="[^"]*\bsmall\b/g, 'button', 'a small button is .sm');

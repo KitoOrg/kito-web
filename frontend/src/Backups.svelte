@@ -54,11 +54,7 @@
   };
 </script>
 
-<PageHead title="Backups">
-  {#snippet lead()}
-    The whole server in one archive: every repository, the people, the settings. It is compressed and encrypted with the
-    server’s backup key, which <code>kito-server backup key</code> prints on its machine: a restore needs it.
-  {/snippet}
+<PageHead title="Backups" docs="backups">
   {#snippet actions()}
     <button class="primary" disabled={busy} onclick={now}>{busy ? 'Backing up…' : 'Back up now'}</button>
   {/snippet}
@@ -105,14 +101,10 @@
           </tr>
         {:else}
           <tr>
-            <td colspan="5"><Empty inset title="No backups yet">Back up now to make the first one.</Empty></td>
+            <td colspan="5"><Empty inset title="No backups yet" /></td>
           </tr>
         {/each}
       </tbody>
     </table>
   </div>
-  <p class="footnote">
-    To put one back: <code>kito-server restore &lt;archive&gt; --to &lt;empty directory&gt; --key &lt;key file&gt;</code>, then
-    serve from there.
-  </p>
 {/if}

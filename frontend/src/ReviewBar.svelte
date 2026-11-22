@@ -112,10 +112,7 @@
     <label class="field">
       <span>Your review</span>
       <textarea bind:value={text} use:focus></textarea>
-      <span class="hint">
-        What should change, or why it is good: the lane’s agent is told{#if drafts.length > 0}, with the
-          {count(drafts.length, 'comment')} left on its lines{/if}.
-      </span>
+      {#if drafts.length > 0}<span class="hint">Sent with the {count(drafts.length, 'comment')} left on its lines.</span>{/if}
     </label>
   {/if}
   <div class="line">

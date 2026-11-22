@@ -54,14 +54,14 @@
   const target = (op) => (op.symbol && op.path ? `${op.path}:${op.symbol}` : op.path);
 </script>
 
-<PageHead title="Log" lead="What is on the main lane, newest first: each checkpoint, and the changes it holds." />
+<PageHead title="Log" docs="log" />
 
 {#if failed}
   <Err message={failed} />
 {:else if entries === null}
   <Loading lines={5} />
 {:else if groups.length === 0}
-  <Empty title="Nothing recorded yet">Each checkpoint of the main lane, and what it holds, shows here.</Empty>
+  <Empty title="Nothing recorded yet" />
 {:else}
   <div class="stack">
     {#each groups as group}

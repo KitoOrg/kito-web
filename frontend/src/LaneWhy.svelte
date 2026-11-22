@@ -42,7 +42,7 @@
 
 <Err message={failed} />
 {#if targets.length === 0}
-  <Empty title="No changes yet">The reasons behind the code this lane changes show here.</Empty>
+  <Empty title="No changes yet" />
 {/if}
 {#each targets.slice(0, SHOWN) as one (one.target)}
   {@const graph = graphs[one.target]}

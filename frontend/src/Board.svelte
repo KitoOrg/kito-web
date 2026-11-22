@@ -115,11 +115,7 @@
   <button class="primary" disabled={opening} onclick={() => ((opening = true), (opened = null))}>Open a lane</button>
 {/snippet}
 
-<PageHead
-  title="Lanes"
-  lead="Each lane is one piece of work by one agent: where it stands, who works in it, and what it changes."
-  actions={role === 'read' ? null : opener}
-/>
+<PageHead title="Lanes" docs="lanes" actions={role === 'read' ? null : opener} />
 
 {#if opening}
   <form
@@ -133,17 +129,15 @@
     <label class="field">
       <span>Who works in it</span>
       <input bind:value={agent} placeholder="alice" use:focus />
-      <span class="hint">The agent, by its name.</span>
     </label>
     <label class="field">
       <span>Why</span>
       <input bind:value={intent} placeholder="prices in cents" />
-      <span class="hint">What the next agent is told before it changes this code.</span>
     </label>
     <label class="field">
       <span>Scope</span>
       <input class="mono" bind:value={scope} placeholder="src/shop.ts:total" />
-      <span class="hint">The functions, files and directories it will change, with spaces between them.</span>
+      <span class="hint">Functions, files or directories, separated by spaces.</span>
     </label>
     <div class="controls">
       <button class="primary" disabled={busy || agent.trim() === '' || intent.trim() === '' || scope.trim() === ''}>
@@ -183,15 +177,11 @@
   <Loading />
 {:else if shown.length === 0}
   {#if filter === 'mine'}
-    <Empty title="No open lane is yours">A lane is yours when it was opened for you.</Empty>
+    <Empty title="No open lane is yours" />
   {:else if filter === 'closed'}
-    <Empty title="No closed lanes">A lane is closed once its work is integrated, or given up.</Empty>
+    <Empty title="No closed lanes" />
   {:else}
-    <Empty title="No open lanes">
-      An agent opens one with the <code>open_lane</code> tool; a person with
-      <code>kito lane open alice --intent "prices in cents" --scope src/shop.ts:total</code
-      >{#if role !== 'read'}, or with “Open a lane” above{/if}.
-    </Empty>
+    <Empty title="No open lanes" />
   {/if}
 {:else}
   <ul class="panel rows">

@@ -71,14 +71,14 @@
   verify();
 </script>
 
-<PageHead title="Audit log">
+<PageHead title="Audit log" docs="audit-log">
   {#snippet after()}
-    {#if whole?.whole}<span class="chip ok">whole</span>{:else if whole}<span class="chip bad">broken</span>{/if}
-  {/snippet}
-  {#snippet lead()}
-    What changed the server and who did it, kept forever; each request, kept 90 days. Every line is chained to the one before
-    it, so a line taken out or changed is found.
-    {#if whole?.whole}{count(whole.lines, 'line')} checked, all in order.{/if}
+    {#if whole?.whole}
+      <span class="chip ok">whole</span>
+      <span class="small soft">{count(whole.lines, 'line')}</span>
+    {:else if whole}
+      <span class="chip bad">broken</span>
+    {/if}
   {/snippet}
   {#snippet actions()}
     <button disabled={checking} onclick={() => verify(true)}>{checking ? 'Checking…' : 'Check again'}</button>
@@ -102,9 +102,9 @@
     />
     Each request
   </label>
-  <input aria-label="Who" placeholder="ada" bind:value={who} />
-  <input class="mono" aria-label="Kind" placeholder="role_changed" bind:value={kind} />
-  <input aria-label="Repository" placeholder="shop" bind:value={repo} />
+  <input aria-label="Who" placeholder="Who" bind:value={who} />
+  <input aria-label="Kind" placeholder="Kind" bind:value={kind} />
+  <input aria-label="Repository" placeholder="Repository" bind:value={repo} />
   <select
     aria-label="Time"
     value={days}
@@ -146,11 +146,9 @@
           <tr>
             <td colspan="5">
               {#if narrowed}
-                <Empty inset title="Nothing matches">Nothing the log keeps fits this search.</Empty>
+                <Empty inset title="Nothing matches" />
               {:else}
-                <Empty inset title="Nothing in the log yet">
-                  {requests ? 'Each request is written here as it is answered.' : 'What changes the server is written here as it happens.'}
-                </Empty>
+                <Empty inset title="Nothing in the log yet" />
               {/if}
             </td>
           </tr>
@@ -159,6 +157,6 @@
     </table>
   </div>
   {#if entries.length >= LIMIT}
-    <p class="footnote">These are the latest {LIMIT}: narrow the search to see what came before them.</p>
+    <p class="footnote">The latest {LIMIT} are shown.</p>
   {/if}
 {/if}

@@ -137,11 +137,7 @@
   <button class="primary" disabled={adding !== null} onclick={() => (adding = { title: '', text: '', for: '' })}>Add a task</button>
 {/snippet}
 
-<PageHead
-  title="Tasks"
-  lead="What needs doing here, and the lanes that do it. A task is closed by a person, once its lanes are."
-  actions={mayWrite ? adder : null}
-/>
+<PageHead title="Tasks" docs="tasks" actions={mayWrite ? adder : null} />
 <Err message={loadFailed || failedAt('shown') || failedAt('board')} />
 
 {#if adding}
@@ -154,12 +150,12 @@
     <label class="field">
       <span>More about it</span>
       <textarea rows="4" bind:value={adding.text}></textarea>
-      <span class="hint">Markdown. Whoever takes it up reads this first.</span>
+      <span class="hint">Markdown.</span>
     </label>
     <label class="field">
       <span>For</span>
       <input bind:value={adding.for} placeholder="bob" />
-      <span class="hint">A person or an agent. Left empty, it is for nobody yet.</span>
+      <span class="hint">A person or an agent.</span>
     </label>
     <div class="controls">
       <button class="primary" disabled={busy !== '' || !adding.title.trim()}>{busy === 'add' ? 'Adding…' : 'Add'}</button>
@@ -218,7 +214,7 @@
               <input id="task-for" bind:value={assignee} placeholder="bob" />
               <button class="primary" disabled={busy !== '' || assignee.trim() === (shown.for ?? '')}>{busy === 'for' ? 'Saving…' : 'Save'}</button>
             </div>
-            <span class="hint">A person or an agent. Left empty, it is for nobody.</span>
+            <span class="hint">A person or an agent.</span>
           </form>
           <Err message={failedAt('for')} />
           <div class="controls">
@@ -254,7 +250,6 @@
           {#if mayWrite}
             <form class="box" onsubmit={say}>
               <textarea rows="3" bind:value={comment} aria-label="Comment"></textarea>
-              <span class="hint">The agents in its lanes are told.</span>
               <div class="controls">
                 <button disabled={busy !== '' || !comment.trim()}>{busy === 'comment' ? 'Commenting…' : 'Comment'}</button>
               </div>
@@ -272,9 +267,7 @@
 {#if tasks === null}
   {#if !loadFailed}<Loading />{/if}
 {:else if tasks.length === 0}
-  <Empty title="No tasks yet">
-    {#if mayWrite}Add one: what needs doing, and whom it is for.{:else}Whoever may write here adds them.{/if}
-  </Empty>
+  <Empty title="No tasks yet" />
 {:else}
   <div class="board">
     {#each TASK_PLACES as place (place)}
@@ -336,10 +329,6 @@
       </ul>
     </details>
   {/if}
-  <p class="footnote">
-    A lane is opened for a task by adding <code>--task task#3</code> to <code>kito lane open</code>; agents take one up when you tell them
-    to.
-  </p>
 {/if}
 
 <style>

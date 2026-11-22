@@ -329,9 +329,7 @@
   {:else if about.team && !repo}
     <Home {seen} {who} />
   {:else if !about.known}
-    <Empty title="This browser has no access">
-      Open the address <code>kito web</code> printed when it started, the whole of it: it carries what gives this browser access, once.
-    </Empty>
+    <Empty title="This browser has no access">Open the whole address <code>kito web</code> printed.</Empty>
   {:else if page.name === 'lane'}
     {#key page.lane}
       <Lane lane={page.lane} tab={page.tab} at={page.at} user={who?.user ?? null} {role} />

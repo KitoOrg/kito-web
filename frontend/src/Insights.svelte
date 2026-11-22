@@ -51,7 +51,6 @@
     load();
   });
 
-  const scope = $derived(repo ? `in ${repo}` : team ? 'in every repository you may use' : 'in this repository');
   // What a link into a repository starts with, on the page of them all.
   const into = (name) => (team && name && name !== repo ? `?repo=${encodeURIComponent(name)}` : '');
 
@@ -145,7 +144,7 @@
   };
 </script>
 
-<PageHead title="Insights" lead={`The numbers ${scope}: lanes week by week, each assistant and model, where the code is busy, review.`}>
+<PageHead title="Insights" docs="insights">
   {#snippet actions()}
     <select aria-label="Time" bind:value={days}>
       {#each times as [value, label] (value)}<option {value}>{label}</option>{/each}
@@ -176,7 +175,7 @@
       </div>
     </div>
     {#if stats.kept_from_ms}
-      <p class="footnote">Counted from {day(stats.kept_from_ms)}, when Kito began keeping what happens here.</p>
+      <p class="footnote">Counted from {day(stats.kept_from_ms)}.</p>
     {/if}
 
     <div class="charts">

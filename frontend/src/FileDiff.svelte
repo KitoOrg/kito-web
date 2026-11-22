@@ -175,7 +175,6 @@
                   <label class="field">
                     <span>Comment on line {row.now}</span>
                     <textarea bind:value={text} use:focus></textarea>
-                    <span class="hint">It is sent with your review, and the lane’s agent is told then.</span>
                   </label>
                   {#if suggestion !== null}
                     <label class="field">

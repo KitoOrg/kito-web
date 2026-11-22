@@ -61,7 +61,6 @@
 <section class="stack">
   <div>
     <h2 class="section-title">Conflicts <span class="count">{conflicts.length}</span></h2>
-    <p class="section-lead">Each decision is applied by the next integration.</p>
   </div>
   {#each conflicts as conflict (conflict.id)}
     <article class="panel">

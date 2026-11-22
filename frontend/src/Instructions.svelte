@@ -156,17 +156,11 @@
 </script>
 
 {#snippet overKitchen()}
-  Saving makes it this repository’s own, told here instead of the kitchen’s. What every repository that uses the kitchen
-  is told is changed {#if kitchenHref}<a href={kitchenHref}>in the kitchen</a>{:else}in the kitchen{/if}, through a lane.
+  Saving makes it this repository’s own. The kitchen’s is changed
+  {#if kitchenHref}<a href={kitchenHref}>in the kitchen</a>{:else}in the kitchen{/if}.
 {/snippet}
 
-<PageHead title="Instructions">
-  {#snippet lead()}
-    What the assistants are told in this repository: Kito’s rules first, then the instructions of the kitchen it uses,
-    then its own, which win where both have a file of the same name. Kito writes them into <code>CLAUDE.md</code> and
-    <code>AGENTS.md</code> at every session: they are not in the repository.
-  {/snippet}
-</PageHead>
+<PageHead title="Instructions" docs="instructions" />
 
 <Err message={failed} />
 
@@ -176,11 +170,11 @@
   <div class="stack">
     <p class="soft">
       {#if !told.kitchen}
-        This repository uses the standard kitchen: Kito’s rules alone.
+        Uses the standard kitchen
       {:else}
-        This repository uses
+        Uses the kitchen
         {#if kitchenHref}<a href={kitchenHref}>{kitchenRepo}</a>{:else if kitchenRepo}{kitchenRepo}{:else}<span class="mono">{told.kitchen}</span>{/if}
-        as its kitchen{#if told.kitchen_found}.{:else}&nbsp;<span class="chip bad">not found</span>{/if}
+        {#if !told.kitchen_found}<span class="chip bad">not found</span>{/if}
       {/if}
     </p>
 
@@ -325,9 +319,7 @@
           {:else}
             <tr>
               <td colspan={mayWrite ? 4 : 3}>
-                <Empty inset title="No change yet">
-                  Who writes, changes or removes an instruction here is kept, with a way to put it back.
-                </Empty>
+                <Empty inset title="No change yet" />
               </td>
             </tr>
           {/each}

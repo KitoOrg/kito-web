@@ -103,12 +103,9 @@
   }
 </script>
 
-<PageHead title="Code and why">
-  {#snippet lead()}
-    The files as {#if lane}<a class="ref" href={laneLink(lane)}>{laneName(lane)}</a> has{:else}the main lane has{/if} them:
-    a file is read with the reason each of its lines was last written for. Earlier work is found by the words of its reason.
-  {/snippet}
-</PageHead>
+{#snippet inLane()}As <a class="ref" href={laneLink(lane)}>{laneName(lane)}</a> has it{/snippet}
+
+<PageHead title="Code and why" docs="code-and-why" lead={lane ? inLane : null} />
 
 <Err message={listFailed} />
 
@@ -182,9 +179,7 @@
 
   {#if !file}
     {#if files?.length !== 0}
-      <Empty title="Pick a file">
-        Each of its lines has an edge in the colour of the reason it was last written for. Press a line to read that reason.
-      </Empty>
+      <Empty title="Pick a file" />
     {/if}
   {:else if failed}
     <Err message={failed} />
@@ -246,9 +241,6 @@
 
         <section class="panel pad box">
           <h3>Reasons</h3>
-          {#if reasons.length > 0}
-            <p class="hint">Newest first. Press one to see the lines written for it, or a line to read its reason.</p>
-          {/if}
           {#each reasons as reason, index}
             <button
               class={['bare', 'why', `hue-${index % 6}`]}

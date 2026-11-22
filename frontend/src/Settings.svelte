@@ -125,7 +125,7 @@
   {/if}
 {/snippet}
 
-<PageHead title="Settings" lead="How this repository is run. A change counts from the next integration, and the server keeps who made it." />
+<PageHead title="Settings" docs="settings" />
 
 <Err message={failed} />
 
@@ -134,11 +134,10 @@
 {:else if now}
   <div class="narrow">
     <h2 class="section-title">Rules</h2>
-    <p class="section-lead">What a lane meets before it is integrated, and where each integration is pushed.</p>
     <div class="stack">
       <SettingCard
         title="Main lane"
-        about="Protected, it changes only when a lane is integrated. Not protected, it can also be edited directly on the server."
+        about="Protected, it changes only when a lane is integrated."
       >
         {#snippet state()}
           {#if now.protected}<span class="chip ok">protected</span>{:else}<span class="chip warn">not protected</span>{/if}
@@ -159,7 +158,7 @@
         {#snippet history()}{@render changed('protected')}{/snippet}
       </SettingCard>
 
-      <SettingCard title="Approvals" about="How many people, other than the one a lane is for, approve it before it is integrated.">
+      <SettingCard title="Approvals" about="Approvals a lane needs before it is integrated.">
         <div class="controls">
           <input class="digits" type="number" min="0" max="99" aria-label="Approvals" bind:value={approvals} />
           <button class="primary" disabled={busy !== '' || (Number(approvals) || 0) === (now.approvals ?? 0)} onclick={saveApprovals}>
@@ -170,7 +169,7 @@
         {#snippet history()}{@render changed('approvals')}{/snippet}
       </SettingCard>
 
-      <SettingCard title="Check commands" about="Commands that must succeed on the merged result, one per line, in the order they run.">
+      <SettingCard title="Check commands" about="Run on the merged result, one per line.">
         {#if admin}
           <textarea rows="4" class="mono" aria-label="Check commands" placeholder="npm test" bind:value={checks}></textarea>
           <div class="controls">
@@ -187,14 +186,14 @@
               {#each now.checks as check}<li>{check}</li>{/each}
             </ol>
           {/if}
-          <p class="hint">Only admins change them: they run on the server’s machine.</p>
+          <p class="hint">Only admins change them.</p>
         {/if}
         {#snippet history()}{@render changed('checks')}{/snippet}
       </SettingCard>
 
       <SettingCard
         title="Git push"
-        about="The git remote every integration is pushed to: a name the repository’s git knows, or an address. Left empty, nothing is pushed."
+        about="The git remote every integration is pushed to."
       >
         <div class="controls">
           <input class="remote mono" aria-label="Git remote" placeholder="origin" bind:value={push} />
@@ -208,15 +207,11 @@
     </div>
 
     <h2 class="section-title">Plugins</h2>
-    <p class="section-lead">
-      What the plugins of this server add to this repository.
-      {#if admin}They are enabled on the <a href={`${location.pathname}#/admin`}>Plugins</a> page.{/if}
-    </p>
     <div class="stack">
       {#if runs('kitchen')}
         <SettingCard
           title="Kitchen"
-          about="The kitchen this repository uses: another repository of this server, whose instructions every assistant here gets first. This repository’s own instructions win."
+          about="The kitchen whose instructions this repository uses."
         >
           <select
             aria-label="Kitchen"
@@ -232,15 +227,9 @@
             {#if used && !kitchens.includes(used)}<option value={used}>{used}</option>{/if}
           </select>
           <Err message={wrong.kitchen} />
-          <p class="hint">
-            {#if used}
-              See <a href={`${location.pathname}#/kitchens?k=${encodeURIComponent(used)}`}>{used}</a> for its behaviour, concepts, recipes
-              and instructions, and who else uses it.
-            {:else}
-              The standard kitchen is Kito’s rules alone. The <a href={`${location.pathname}#/kitchens`}>Kitchens</a> page lists
-              those of this server.
-            {/if}
-          </p>
+          {#if used}
+            <p class="hint"><a href={`${location.pathname}#/kitchens?k=${encodeURIComponent(used)}`}>Open {used}</a></p>
+          {/if}
           {#snippet history()}{@render changed('kitchen')}{/snippet}
         </SettingCard>
       {:else if used}
@@ -253,7 +242,7 @@
         <GitHubSync {repo} {admin} />
       {/if}
       {#if !runs('kitchen') && !runs('github')}
-        <Empty title="No plugin has settings here">None of the plugins that run on this server adds a setting to a repository.</Empty>
+        <Empty title="No plugin has settings here" />
       {/if}
     </div>
   </div>

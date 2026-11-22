@@ -28,19 +28,17 @@
   }
 </script>
 
-<PageHead title="Needs you" lead="What is stopped until you act, in every repository you may use." />
+<PageHead title="Needs you" docs="needs-you" />
 
 {#if who.repos.length === 0}
-  <Empty title="No repository yet">
-    You are signed in as {who.user}, and this server has no repository you may use. An admin gives you one.
-  </Empty>
+  <Empty title="No repository yet">An admin gives you one.</Empty>
 {:else if seen === null}
   <Loading />
 {:else}
   <div class="cols">
     <div>
       {#if seen.needs.length === 0}
-        <Empty title="Nothing waits for you">Agents are at work, or done.</Empty>
+        <Empty title="Nothing waits for you" />
       {:else}
         <ul class="panel rows">
           {#each seen.needs as need (need.href + need.kind)}
@@ -125,7 +123,6 @@
               {/if}
             </p>
           {/each}
-          <p class="hint">Their agents were told of each other. Whether the changes agree is for a person to see.</p>
         </section>
       {/if}
     </aside>

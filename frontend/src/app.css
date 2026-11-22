@@ -325,21 +325,12 @@ q.reason {
   align-items: center;
 }
 
-/* A section of a page: its title, a line on it, and what follows. */
+/* A section of a page: its title, and what follows. */
 .section-title {
   margin: 28px 0 10px;
 }
 .section-title:first-child {
   margin-top: 0;
-}
-.section-title:has(+ .section-lead) {
-  margin-bottom: 2px;
-}
-.section-lead {
-  margin: 0 0 10px;
-  color: var(--soft);
-  max-width: 760px;
-  overflow-wrap: anywhere;
 }
 /* A section whose title has something to press beside it. */
 .section-head {

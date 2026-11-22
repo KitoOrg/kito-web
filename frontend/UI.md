@@ -16,6 +16,11 @@ Where it all lives, in `src/`:
 
 ## Principles
 
+- A page says little. It has no subtitle and explains nothing at length:
+  what a page is for is in the documentation, one press away
+  (`<PageHead docs="lanes">` leads to that part of
+  <https://kito.sh/plugins/web/>). What stays on the page is what is
+  needed to act: a name, a state, a short hint on how to type a value.
 - Nothing is said twice on a page: no chip, heading or sentence that
   repeats what is right next to it; no state or action shown in two
   places.
@@ -34,8 +39,8 @@ Where it all lives, in `src/`:
   of faces and assistants.
 - Weights: 400 text, 500 controls, labels and names in rows, 600 titles.
 - Headings by what they head: `h1` the page (only in `PageHead`),
-  `h2.section-title` a section (a `p.section-lead` under it when it needs
-  a line), `h3` a card, a panel or a column, `h4` a group inside one.
+  `h2.section-title` a section, with no line under it, `h3` a card, a
+  panel or a column, `h4` a group inside one.
 - Mono (`.mono`, `code`) is for what could be typed: lanes, tasks,
   checkpoints, paths, functions, commands, addresses. Names of people and
   repositories are plain.
@@ -44,8 +49,8 @@ Where it all lives, in `src/`:
 
 - One container (`.wrap`) for the top bar, the tabs and the page: their
   left edges are the same.
-- Pages use the whole container. Text is at most 760 wide (`.lead`,
-  `.section-lead`), forms and settings 720 (`.narrow`). No other widths.
+- Pages use the whole container. Text is at most 760 wide (`.lead`),
+  forms and settings 720 (`.narrow`). No other widths.
 - Two columns: `.cols` (the page and a 300px side column), `.cols.left`
   (a 240px list and what it lists). They stack under 900px.
 - `.stack` puts things under one another, 12px apart. A card is
@@ -57,13 +62,15 @@ Where it all lives, in `src/`:
 
 ## The head of a page
 
-`<PageHead title="Tasks" lead="…">`, with `after` (a chip beside the
+`<PageHead title="Tasks" docs="tasks">`, with `after` (a chip beside the
 title) and `actions` (buttons on the right). It names the browser's tab.
 
 - The title is the words of the tab or the menu entry that leads there.
-  The scope ("in shop", "every repository") goes in the lead.
+  Nothing under it says what the page is: `docs` names the part of the
+  documentation that does, and shows as a "Docs" link.
 - A page about one thing takes the thing as its title and says the way
-  back (`back={{ href, label }}`): a lane, a function, a kitchen.
+  back (`back={{ href, label }}`): a lane, a function, a kitchen. Its
+  `lead` (a snippet) is the facts of that thing, in one line.
 
 ## Buttons
 
@@ -104,9 +111,9 @@ asks for the name to be typed.
 ## Nothing, waiting, not for you
 
 - `<Loading />` while something is asked for; `<Empty title="No lanes
-  yet">a line on why, or what to do</Empty>` where there is nothing
-  (title: a few words, no full stop). In a table: one row with one cell.
-  A value that is not there: `<span class="none">None</span>`.
+  yet" />` where there is nothing (a few words, no full stop; a line
+  under it only when it says what to do). In a table: one row with one
+  cell. A value that is not there: `<span class="none">None</span>`.
 - A page for others is `<NoAccess>`, shown by `App.svelte`.
 
 ## Chips, and what is not one
@@ -140,11 +147,13 @@ asks for the name to be typed.
 ## Forms
 
 - A field is `<label class="field"><span>Name</span><input><span
-  class="hint">…</span></label>`: its name above, help under. Several
-  side by side: `.fields`. A placeholder is one example of a value.
+  class="hint">…</span></label>`: its name above, and under it a hint
+  only when the value has a form to follow, in a few words. Several side
+  by side: `.fields`. A placeholder is one example of a value.
 - A filter bar (`form.panel.filters`) has no visible labels: every
-  control has an `aria-label`. What is chosen applies at once; what is
-  typed, on Enter or Search.
+  control has an `aria-label`, and a placeholder that names it. What is
+  chosen applies at once; what is typed, on Enter or Search.
+- A setting has one short line on what it does (`SettingCard about`).
 - A setting that is chosen saves at once; one that is typed has Save.
 - A new thing is added in a form opened from the head of the page
   (`form.panel.pad.narrow.form`: an `h3`, the fields, `[Add] [Cancel]`),

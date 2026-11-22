@@ -96,7 +96,7 @@
   let live = $derived(new Set((said?.repos ?? []).map((one) => one.name)));
 </script>
 
-<PageHead title="Repositories" lead="Every repository of this server. Whoever adds one maintains it, and says who else uses it.">
+<PageHead title="Repositories" docs="repositories">
   {#snippet actions()}
     <button class="primary" disabled={adding} onclick={() => (adding = true)}>Add a repository</button>
   {/snippet}
@@ -110,18 +110,18 @@
     <label class="field">
       <span>Name</span>
       <input use:focus placeholder="shop" bind:value={name} />
-      <span class="hint">Letters, digits, dots, dashes and underscores, after a letter or a digit.</span>
+      <span class="hint">Letters, digits, dots, dashes and underscores.</span>
     </label>
     <label class="field">
       <span>Git address</span>
       <input placeholder="https://github.com/acme/shop.git" bind:value={from} />
-      <span class="hint">Optional: the repository starts with the history cloned from there. Left empty, it starts new.</span>
+      <span class="hint">Optional: its history is cloned from there.</span>
     </label>
     {#if from.trim().startsWith('https://')}
       <label class="field">
         <span>Token</span>
         <input type="password" autocomplete="off" bind:value={token} />
-        <span class="hint">For a private one: used once for the clone, kept nowhere.</span>
+        <span class="hint">For a private one: used once, kept nowhere.</span>
       </label>
     {/if}
     <div class="controls">
@@ -171,7 +171,7 @@
             </tr>
           {:else}
             <tr>
-              <td colspan="4"><Empty inset title="No repositories yet">Add one here, or send one from your machine.</Empty></td>
+              <td colspan="4"><Empty inset title="No repositories yet" /></td>
             </tr>
           {/each}
         </tbody>
@@ -179,17 +179,9 @@
     </div>
     <Err message={wrong.live} />
   </div>
-  <p class="footnote">
-    To send one from your machine, history and all: <code>kito repos add &lt;name&gt; --push &lt;directory&gt;</code> in a connected
-    directory.
-  </p>
 
   {#if said.archived.length > 0}
     <h2 class="section-title">Archived</h2>
-    <p class="section-lead">
-      Out of reach, and deleted {count(said.keep_archived_days, 'day')} after they were archived.
-      {#if !owner}An owner of this server restores one, or deletes it before then.{/if}
-    </p>
     <div class="stack">
       <div class="panel table-wrap">
         <table>
@@ -235,7 +227,6 @@
 
   {#if Object.keys(said.renamed).length > 0}
     <h2 class="section-title">Old names</h2>
-    <p class="section-lead">Directories connected with an old name still reach the repository.</p>
     <div class="panel table-wrap">
       <table>
         <thead>

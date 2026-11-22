@@ -130,14 +130,11 @@
   <label class="field">
     <span>GitHub organization</span>
     <input placeholder="acme" bind:value={org} />
-    <span class="hint">Leave it empty to create the app under your own account.</span>
+    <span class="hint">Empty: your own account.</span>
   </label>
 {/snippet}
 
-<PageHead
-  title="Plugins"
-  lead="Programs run on the server’s machine. A plugin is installed by its name from the registry, runs nowhere until it is enabled, and is given only what you tick."
-/>
+<PageHead title="Plugins" docs="plugins" />
 
 <Err message={failed} />
 
@@ -162,7 +159,7 @@
   <div class="narrow">
     <h2 class="section-title">On this server</h2>
     {#if installed.length === 0}
-      <Empty title="No plugins yet">Install one from the registry; it runs nowhere until it is enabled.</Empty>
+      <Empty title="No plugins yet" />
     {/if}
     <div class="stack">
       {#each installed as plugin (plugin.name)}
@@ -191,7 +188,7 @@
             </p>
           {/if}
           {#if plugin.serves_pages}
-            <p class="hint">It serves these pages: it is disabled on the server’s machine, not from here.</p>
+            <p class="hint">It serves these pages: disabled only on the server’s machine.</p>
           {/if}
           {#if plugin.problem}<p class="notice">{plugin.problem}</p>{/if}
           {#if plugin.last_failure}<p class="notice">It last failed {plugin.last_failure}</p>{/if}
@@ -200,9 +197,8 @@
             <h4>GitHub App</h4>
             {#if hub.app}
               <p>
-                The server’s GitHub App is
-                <a href={hub.app.url} target="_blank" rel="noreferrer">{hub.app.slug} <Icon name="external" /></a>. Install it on
-                repositories at GitHub, then link each repository here in its Settings.
+                The server’s app:
+                <a href={hub.app.url} target="_blank" rel="noreferrer">{hub.app.slug} <Icon name="external" /></a>
               </p>
               <div class="controls">
                 <a class="button sm" href={hub.app.install} target="_blank" rel="noreferrer"
@@ -215,17 +211,11 @@
                   <div class="box">
                     {@render organization()}
                     <div class="controls"><a class="button sm" href={newApp}>Create a new GitHub App</a></div>
-                    <p class="hint">
-                      It replaces the one the server keeps: the new app has to be installed on the repositories again.
-                    </p>
+                    <p class="hint">It replaces the current one: install it on the repositories again.</p>
                   </div>
                 </details>
               {/if}
             {:else}
-              <p class="soft">
-                GitHub makes the server’s app, with its permissions and its webhook. Install it on repositories at GitHub, then link
-                each repository here in its Settings.
-              </p>
               {#if hub.may_create}
                 {@render organization()}
                 <div class="controls"><a class="button primary" href={newApp}>Create GitHub App</a></div>
@@ -243,7 +233,6 @@
               }}
             >
               <h4>What {plugin.name} may do</h4>
-              {#if plugin.asks.length > 0}<p class="hint">Untick what it should not be given.</p>{/if}
               {#each plugin.asks as permission}
                 <label class="check">
                   <input type="checkbox" bind:checked={given[permission]} />
@@ -254,7 +243,7 @@
               {/each}
               <label class="check">
                 <input type="checkbox" bind:checked={forClients} />
-                <span>Run it in the directories connected to this server too, for whoever has it installed</span>
+                <span>Also run it in the directories connected to this server</span>
               </label>
               {#if plugin.adds.length > 0}<p class="soft">It adds: {plugin.adds.join('; ')}.</p>{/if}
               <div class="controls">
@@ -305,10 +294,6 @@
     </div>
 
     <h2 class="section-title">From the registry</h2>
-    <p class="section-lead">
-      What <span class="mono">{all.registry}</span> lists for <span class="mono">{all.platform}</span> that this server does not have
-      yet, or has in an earlier version.
-    </p>
     {#if all.registry_error}
       <Err message={all.registry_error} />
     {:else if forServer.length === 0}
@@ -320,7 +305,7 @@
         {/if}
       </Empty>
     {:else if offered.length === 0}
-      <Empty title="Nothing new in the registry">Every plugin it lists for a server is on this one, in its latest version.</Empty>
+      <Empty title="Nothing new in the registry" />
     {:else}
       <div class="stack">
         {#each offered as listed (listed.name)}
@@ -345,13 +330,6 @@
           </section>
         {/each}
       </div>
-    {/if}
-    {#if forPeople.length > 0}
-      <p class="footnote">
-        Not for a server: {#each forPeople as listed, i}{i > 0 ? ', ' : ''}<span class="mono">{listed.name}</span>{/each}. They set
-        up a coding assistant, or work in a repository, on the machines people work on:
-        <code>kito plugin add &lt;name&gt;</code> there.
-      </p>
     {/if}
   </div>
 {/if}

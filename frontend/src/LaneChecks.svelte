@@ -24,10 +24,7 @@
     </li>
   {/each}
 </ul>
-<p class="footnote">
-  What the check commands say of this lane is known once it asks to be integrated: the answer is shown under the head of
-  this page.
-</p>
+<p class="footnote">Check commands run when the lane asks to be integrated.</p>
 
 <style>
   .items {

@@ -99,7 +99,7 @@
     <a class="ref" href={whyLink(graph.target.file, lane)}>{graph.target.file}</a>{/if}
 {/snippet}
 
-<PageHead title={name} mono name={short} back={{ href: '#/why', label: 'Code and why' }} lead={graph ? facts : null} />
+<PageHead title={name} mono name={short} back={{ href: '#/why', label: 'Code and why' }} docs="code-and-why" lead={graph ? facts : null} />
 
 {#if graph === null}
   {#if failed}<Err message={failed} />{:else}<Loading lines={4} />{/if}
@@ -113,9 +113,6 @@
         {#if graph.reasons.length === 0}
           <p class="none">None yet</p>
         {:else}
-          {#if rows.length > 0 && text !== null}
-            <p class="hint">Press a number to see the lines written for that reason.</p>
-          {/if}
           <ol class="reasons">
             {#each graph.reasons as reason, index}
               <li class={`hue-${index % 6}`}>
@@ -194,7 +191,6 @@
             <label class="field">
               <span>Note</span>
               <textarea bind:value={note} placeholder="Called by the nightly billing job, outside this repository: do not rename." use:focus></textarea>
-              <span class="hint">What whoever changes this code must know, and the code does not show.</span>
             </label>
             <div class="controls">
               <button class="primary" disabled={busy || note.trim() === ''}>{busy ? 'Adding…' : 'Add'}</button>

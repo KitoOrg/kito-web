@@ -270,11 +270,7 @@
     {#snippet lead()}{@render whose(closed)}{/snippet}
   </PageHead>
   <Empty title="This lane is closed">
-    <p>
-      Its working copy is gone, and nothing more is said in it. What was integrated from it is in the
-      <a href="#/log">Log</a> of the main lane, under its reason; why the code it touched is the way it is now is in
-      <a href="#/why">Code and why</a>.
-    </p>
+    <p>What it integrated is in the <a href="#/log">Log</a>.</p>
     {#if closed.scope?.length > 0}
       <p>Its scope: <span class="mono">{closed.scope.join(', ')}</span></p>
     {/if}
@@ -287,7 +283,7 @@
     <Loading lines={4} />
   {/if}
 {:else}
-  <PageHead title={titleOf(info)} name={nameOf(info)} {back} actions={mayWrite && !info.name ? closing : null}>
+  <PageHead title={titleOf(info)} name={nameOf(info)} {back} docs="a-lane" actions={mayWrite && !info.name ? closing : null}>
     {#snippet after()}<State lane={info} />{/snippet}
     {#snippet lead()}
       {@render whose(info)}
@@ -352,7 +348,7 @@
           {#if sinceMine}
             <Empty title="Nothing changed since your review" />
           {:else}
-            <Empty title="No changes yet">What is saved in the lane’s working copy shows here.</Empty>
+            <Empty title="No changes yet" />
           {/if}
         {:else}
           {#each shownFiles as file (`${sinceMine}-${file.path}`)}

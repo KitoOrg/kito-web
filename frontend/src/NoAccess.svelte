@@ -9,9 +9,7 @@
 
 <PageHead {title} />
 {#if who === 'admins'}
-  <Empty title="For the admins of this server">An admin can show you what is here, or make you one.</Empty>
+  <Empty title="For the admins of this server" />
 {:else}
-  <Empty title="For the maintainers of this repository">
-    A maintainer of this repository, or an admin of the server, can change what is here.
-  </Empty>
+  <Empty title="For the maintainers of this repository" />
 {/if}

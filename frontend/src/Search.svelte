@@ -76,7 +76,6 @@
   }
   if (first) search();
 
-  const scope = $derived(repo ? `in ${repo}` : team ? 'in every repository you may use' : 'in this repository');
 
   // A hit of another repository leads into it.
   const prefix = (hit) => (team && hit.repo && hit.repo !== repo ? `?repo=${encodeURIComponent(hit.repo)}` : '');
@@ -122,24 +121,23 @@
   const outcomesOf = (hit) => (Array.isArray(hit.outcome) ? hit.outcome : hit.outcome ? [hit.outcome] : []);
 </script>
 
-<PageHead title="Search" lead={`What was done ${scope}: reasons, changes, lanes, tasks, comments and notes.`} />
+<PageHead title="Search" docs="search" />
 
 <form class="panel filters bar" onsubmit={search}>
-  <input class="words" bind:value={q} aria-label="Words to search for" placeholder="prices cents" />
+  <input class="words" bind:value={q} aria-label="Words to search for" placeholder="Words" />
   <select aria-label="Kind" bind:value={kind} onchange={search}>
     {#each kinds as [value, label] (value)}<option {value}>{label}</option>{/each}
   </select>
   <select aria-label="Time" bind:value={days} onchange={search}>
     {#each times as [value, label] (value)}<option {value}>{label}</option>{/each}
   </select>
-  <input bind:value={doer} aria-label="Who" placeholder="carol" />
-  <input class="mono" bind:value={place} aria-label="Where" placeholder="src/shop.ts:total" />
+  <input bind:value={doer} aria-label="Who" placeholder="Who" />
+  <input bind:value={place} aria-label="Where" placeholder="Where" />
   <select aria-label="Outcome" bind:value={came} onchange={search}>
     <option value="">Any outcome</option>
     {#each outcomes as value (value)}<option {value}>{sentence(outcome(value).text)}</option>{/each}
   </select>
   <button class="primary" disabled={busy}>{busy ? 'Searching…' : 'Search'}</button>
-  <span class="hint about">Who: a person, an agent, an assistant or a model. Where: a file, a directory or a function.</span>
 </form>
 <Err message={failed} />
 
@@ -147,7 +145,7 @@
   <Loading />
 {:else if found !== null}
   {#if found.length === 0}
-    <Empty title="Nothing found">Fewer words, or another kind or time, may find it.</Empty>
+    <Empty title="Nothing found" />
   {:else}
     <p class="soft small tally">{found.length} found</p>
     <ul class="panel rows">
@@ -203,10 +201,6 @@
   /* The words take the room the other fields leave. */
   .bar > .words {
     flex: 3 1 240px;
-  }
-  /* What the fields that have no name take: on a line of its own under them. */
-  .about {
-    flex-basis: 100%;
   }
   .tally {
     margin-bottom: 8px;

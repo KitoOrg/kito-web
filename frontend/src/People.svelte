@@ -173,7 +173,6 @@
     <select bind:value={it.repoRole}>
       {#each repoRoles as role}<option value={role}>{role}</option>{/each}
     </select>
-    <span class="hint">{means[it.repoRole]}</span>
   </label>
 {/snippet}
 
@@ -187,12 +186,7 @@
   </dl>
 {/snippet}
 
-<PageHead
-  title="People"
-  lead={repo
-    ? `Who may use ${repo}, and as what. A change counts at once, also in the connections that are open.`
-    : 'Everybody on this server. Each is a member, an admin or an owner of it, and has a role in the repositories they were given.'}
->
+<PageHead title="People" docs="people">
   {#snippet actions()}
     <button class="primary" disabled={adding} onclick={open}>Add a person</button>
   {/snippet}
@@ -215,9 +209,7 @@
       <label class="field">
         <span>Name</span>
         <input use:focus list={fresh ? undefined : 'people-names'} placeholder="carol" bind:value={it.user} />
-        {#if !fresh}
-          <span class="hint">{admin ? 'Somebody already on this server.' : 'Somebody already on this server: an admin adds new people to it.'}</span>
-        {/if}
+        {#if !fresh && !admin}<span class="hint">An admin adds new people to the server.</span>{/if}
       </label>
       {#if fresh}
         <label class="field">
@@ -236,7 +228,6 @@
           <label class="field">
             <span>Their login</span>
             <input placeholder="carol" bind:value={it.login} />
-            <span class="hint">The name they have where they sign in ({it.way}).</span>
           </label>
         {/if}
         <label class="field">
@@ -244,7 +235,7 @@
           <select bind:value={it.role}>
             {#each serverRoles as role}<option value={role} disabled={!owner && role !== 'member'}>{role}</option>{/each}
           </select>
-          <span class="hint">{means[it.role]}{owner ? '' : ' Only an owner names admins and owners.'}</span>
+          {#if !owner}<span class="hint">Only an owner names admins and owners.</span>{/if}
         </label>
         {#if repo}{@render roleHere()}{/if}
       {:else}
@@ -335,7 +326,7 @@
               </tr>
             {:else}
               <tr>
-                <td colspan="5"><Empty inset title="Nobody yet">Add a person to give them this repository.</Empty></td>
+                <td colspan="5"><Empty inset title="Nobody yet" /></td>
               </tr>
             {/each}
           </tbody>
@@ -344,9 +335,7 @@
       <Err message={wrong.table} />
     </div>
     {@render roles(repoRoles)}
-    <p class="footnote">
-      An admin or an owner of the server maintains every repository: that role is not changed here, and they are not removed.
-    </p>
+    <p class="footnote">Admins and owners of the server maintain every repository.</p>
   {/if}
 {:else if everyone === null && !failed}
   <Loading />
@@ -397,7 +386,7 @@
             </tr>
           {:else}
             <tr>
-              <td colspan="5"><Empty inset title="Nobody yet">Add a person to give them a token, or a way to sign in.</Empty></td>
+              <td colspan="5"><Empty inset title="Nobody yet" /></td>
             </tr>
           {/each}
         </tbody>
@@ -406,7 +395,7 @@
     <Err message={wrong.table} />
   </div>
   {@render roles(serverRoles)}
-  <p class="footnote">Only an owner changes or removes an admin or an owner, and nobody changes or removes themselves.</p>
+  <p class="footnote">Only an owner changes an admin or an owner.</p>
 {/if}
 
 <style>

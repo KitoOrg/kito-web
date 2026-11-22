@@ -32,10 +32,7 @@
 </script>
 
 <div class="narrow">
-  <PageHead
-    title="Sign in"
-    lead={`${methods.length > 0 ? 'With one of the ways this server offers, or with a token it gave you.' : 'With the token this server gave you.'} Who may use which repository is decided by whoever runs it.`}
-  />
+  <PageHead title="Sign in" />
   <div class="stack">
     {#if methods.length > 0}
       <div class="controls">
