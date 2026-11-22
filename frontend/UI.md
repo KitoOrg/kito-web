@@ -11,8 +11,10 @@ Where it all lives, in `src/`:
 - `format.js`: how values are written (times, sizes, counts, names).
 - `standing.js`: how states are worded, and their tone.
 - `PageHead`, `Confirm`, `Err`, `Empty`, `Loading`, `NoAccess`, `Time`,
-  `State`, `Icon`, `SettingCard`, `Editor`, `Face`, `Assistant`: one
-  component each for what every page needs.
+  `State`, `Icon`, `SettingCard`, `Editor`, `Face`, `Assistant`,
+  `CopyLine`: one component each for what every page needs.
+- `SignsIn`: how one person signs in and what changes it, the same for
+  an admin on the page of everybody and for oneself on Account.
 
 ## Principles
 
@@ -107,6 +109,9 @@ asks for the name to be typed.
   Only a page that could not load says it at the top.
 - What has to stay (a token to copy, a path): a `.result` panel with an
   icon Close. Never a toast as well.
+- A line to run or to pass on (a command, a token) is `<CopyLine
+  text={…} />`: the line in its own box, and Copy. A `kito connect` line
+  is written by `connectLine` in `format.js`, nowhere else.
 
 ## Nothing, waiting, not for you
 
