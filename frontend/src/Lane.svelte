@@ -12,7 +12,9 @@
   import LaneChecks from './LaneChecks.svelte';
   import LaneTalk from './LaneTalk.svelte';
   import LaneWhy from './LaneWhy.svelte';
+  import ReviewBar from './ReviewBar.svelte';
   import State from './State.svelte';
+  import { loadDrafts, saveDrafts } from './review.js';
 
   // `tab`: which part is read; `at`: the file to go to in the changes.
   // `user`, `role`: who is signed in behind a server, and what they may do.
@@ -30,6 +32,44 @@
   let failed = $state('');
   // A lane that is closed: what is still known of it.
   let closed = $state(null);
+
+  // The review being written: its comments wait here until it is sent.
+  let drafts = $state(loadDrafts(lane));
+  $effect(() => saveDrafts(lane, drafts));
+  const draft = (one) => (drafts = [...drafts, { ...one, id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}` }]);
+  const undraft = (id) => (drafts = drafts.filter((one) => one.id !== id));
+  async function sent(clear = true) {
+    if (clear) drafts = [];
+    await load();
+    if (since) await loadSince();
+  }
+
+  // What changed since the verdict of who is signed in, instead of all of it.
+  let sinceMine = $state(false);
+  let since = $state(null);
+  async function loadSince() {
+    try {
+      since = await ask('changes_since_review', { lane });
+    } catch (error) {
+      since = { files: [], error: error.message };
+    }
+  }
+  $effect(() => {
+    if (sinceMine) loadSince();
+    else since = null;
+  });
+
+  // Integrating from the review bar is the panel's integrating.
+  let integrator = $state(null);
+  let integrating = $state(false);
+  async function integrate() {
+    integrating = true;
+    try {
+      await integrator?.integrate();
+    } finally {
+      integrating = false;
+    }
+  }
 
   async function load() {
     try {
@@ -154,6 +194,9 @@
   });
 
   const who = (verdict) => (verdict.for ? `${verdict.by}, of ${verdict.for}` : verdict.by);
+  // Whether who is signed in gave a verdict: then they may see what changed since.
+  let reviewed = $derived(Boolean(review?.verdicts.some((verdict) => user === null || verdict.by === user)));
+  let shownFiles = $derived(sinceMine && since ? since.files : (diff?.files ?? []));
 </script>
 
 {#if info === null && closed}
@@ -229,16 +272,40 @@
         {#if info.out_of_scope?.length > 0}
           <p class="notice">Changed outside what it declared: <span class="mono">{info.out_of_scope.join(', ')}</span></p>
         {/if}
-        <p class="summary soft">
-          {count(diff.files.length, 'file', 'files')} changed,
-          <span class="plus">+{totals.added}</span> <span class="minus">−{totals.removed}</span>
-          · from {diff.base}
-        </p>
-        {#if diff.files.length === 0}
+        <div class="summary-row">
+          <p class="summary soft">
+            {count(diff.files.length, 'file', 'files')} changed,
+            <span class="plus">+{totals.added}</span> <span class="minus">−{totals.removed}</span>
+            · from {diff.base}
+          </p>
+          {#if reviewed}
+            <div class="seg" role="group" aria-label="Which changes">
+              <button aria-pressed={!sinceMine} onclick={() => (sinceMine = false)}>All changes</button>
+              <button aria-pressed={sinceMine} onclick={() => (sinceMine = true)}>Since my review</button>
+            </div>
+          {/if}
+        </div>
+        {#if sinceMine && since?.error}
+          <p class="error">{since.error}</p>
+        {:else if sinceMine && since && since.files.length === 0}
+          <div class="panel empty soft">Nothing changed since your review.</div>
+        {:else if sinceMine && since}
+          <p class="soft small">What changed since your verdict ({since.verdict}), against what you saw then.</p>
+        {/if}
+        {#if !sinceMine && diff.files.length === 0}
           <div class="panel empty soft">This lane has changed nothing yet.</div>
         {/if}
-        {#each diff.files as file (file.path)}
-          <FileDiff {lane} {file} threads={inFile(file.path)} changed={load} />
+        {#each shownFiles as file (`${sinceMine}-${file.path}`)}
+          <FileDiff
+            {lane}
+            {file}
+            threads={inFile(file.path)}
+            changed={load}
+            drafts={drafts.filter((one) => one.path === file.path)}
+            draft={role !== 'read' ? draft : null}
+            {undraft}
+            mayWrite={role !== 'read'}
+          />
         {/each}
       {:else if part === 'checks'}
         <LaneChecks {rows} />
@@ -249,7 +316,7 @@
 
     <aside>
       {#if role !== 'read'}
-        <Integrate {lane} {info} changed={load} />
+        <Integrate bind:this={integrator} {lane} {info} changed={load} />
       {/if}
 
       <section class="panel box" aria-label="Review">
@@ -326,6 +393,21 @@
       </section>
     </aside>
   </div>
+  {#if role !== 'read'}
+    <ReviewBar
+      {lane}
+      {drafts}
+      {review}
+      {stops}
+      {user}
+      owner={info.owner ?? null}
+      mayIntegrate
+      {integrating}
+      {sent}
+      {integrate}
+      checks={here('checks')}
+    />
+  {/if}
 {/if}
 
 <style>
@@ -442,6 +524,30 @@
   .summary {
     margin: 0;
     font-size: 14px;
+  }
+  .summary-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+  .seg {
+    display: inline-flex;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .seg button {
+    border: 0;
+    border-radius: 0;
+    background: var(--panel);
+    font-size: 13px;
+    padding: 4px 10px;
+  }
+  .seg button[aria-pressed='true'] {
+    background: var(--accent);
+    color: var(--accent-ink);
   }
   .plus {
     color: var(--added-ink);

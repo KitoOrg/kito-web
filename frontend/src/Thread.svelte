@@ -2,7 +2,7 @@
   // A comment and its answers, with a way to answer and to resolve.
   import { ask, ago, focus } from './api.js';
 
-  let { lane, comment, answers = [], changed } = $props();
+  let { lane, comment, answers = [], changed, mayWrite = true } = $props();
 
   let answering = $state(false);
   let text = $state('');
@@ -26,6 +26,7 @@
 
   const answer = () => act(() => ask('comment', { lane, text, reply_to: comment.id }));
   const resolve = () => act(() => ask('resolve_comment', { comment: comment.id }));
+  const apply = () => act(() => ask('apply_suggestion', { comment: comment.id, lane }));
   const who = (said) => (said.for ? `${said.by}, of ${said.for}` : said.by);
 </script>
 
@@ -41,6 +42,16 @@
       <pre class="quoted">{comment.quoted}</pre>
     {/if}
     <p class="text">{comment.text}</p>
+    {#if comment.suggestion !== undefined && comment.suggestion !== null}
+      <div class="suggestion">
+        <p class="label faint">Suggested change</p>
+        {#if comment.quoted}<pre class="was">{comment.quoted}</pre>{/if}
+        <pre class="now">{comment.suggestion}</pre>
+        {#if !comment.resolved_by && !comment.outdated && mayWrite}
+          <button class="primary" disabled={busy} onclick={apply}>Apply it</button>
+        {/if}
+      </div>
+    {/if}
   </div>
   {#each answers as said (said.id)}
     <div class="said answer">
@@ -120,6 +131,30 @@
   }
   form {
     margin-top: 10px;
+  }
+  .suggestion {
+    margin-top: 8px;
+  }
+  .label {
+    margin: 0 0 4px;
+    font-size: 12px;
+  }
+  .was,
+  .now {
+    margin: 0;
+    padding: 4px 10px;
+    font: 12px/1.5 var(--mono);
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .was {
+    background: var(--removed);
+    border-radius: 6px 6px 0 0;
+  }
+  .now {
+    background: var(--added);
+    border-radius: 0 0 6px 6px;
+    margin-bottom: 6px;
   }
   .actions {
     display: flex;

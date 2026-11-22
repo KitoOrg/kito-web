@@ -1,16 +1,27 @@
 <script>
   // What a lane did to one file: its functions, its lines, and what was
   // said on them.
-  import { ask, focus, whyLink } from './api.js';
+  import { focus, whyLink } from './api.js';
+  import { markViewed, viewedAs } from './review.js';
   import Thread from './Thread.svelte';
 
-  let { lane, file, threads, changed } = $props();
+  // `drafts`: the comments of the review being written, on this file;
+  // `draft`, `undraft`: add one, take one out (Kito 0.38).
+  let { lane, file, threads, changed, drafts = [], draft = null, undraft = null, mayWrite = true } = $props();
 
   // The line a comment is being written on (its number in the lane's text).
   let writing = $state(null);
   let text = $state('');
-  let busy = $state(false);
+  // Lines suggested in the place of the one commented on; null: none.
+  let suggestion = $state(null);
   let failed = $state('');
+
+  // Viewed: folded, until the lane changes the file again.
+  let viewed = $state(viewedAs(lane, file.path) === (file.after ?? file.before ?? ''));
+  function setViewed(on) {
+    viewed = on;
+    markViewed(lane, file.path, on ? (file.after ?? file.before ?? '') : null);
+  }
 
   // Every line of every hunk, with where it is on each side.
   let hunks = $derived(
@@ -36,20 +47,20 @@
   let above = $derived(threads.filter((thread) => !inline.includes(thread)));
   const on = (line) => inline.filter((thread) => thread.comment.lines[1] === line);
 
-  async function comment() {
-    busy = true;
-    failed = '';
-    try {
-      await ask('comment', { lane, text, on: `${file.path}:${writing}` });
-      text = '';
-      writing = null;
-      await changed();
-    } catch (error) {
-      failed = error.message;
-    } finally {
-      busy = false;
+  function keep() {
+    if (text.trim().length < 2 && suggestion === null) {
+      failed = 'Say a few words, or suggest lines.';
+      return;
     }
+    draft?.({ on: `${file.path}:${writing}`, path: file.path, line: writing, text: text.trim(), suggestion });
+    text = '';
+    suggestion = null;
+    writing = null;
+    failed = '';
   }
+  const draftsOn = (line) => drafts.filter((one) => one.line === line);
+  // The text of a line of the lane, to start a suggestion from.
+  const lineText = (line) => hunks.flatMap((hunk) => hunk.rows).find((row) => row.now === line)?.text ?? '';
 
   const where = (symbol) => {
     if (!symbol.lines) return '';
@@ -72,7 +83,12 @@
       <span class="plus">+{file.added}</span>
       <span class="minus">−{file.removed}</span>
     {/if}
+    <label class="viewed" title="Fold it until the lane changes it again">
+      <input type="checkbox" checked={viewed} onchange={(event) => setViewed(event.currentTarget.checked)} /> Viewed
+    </label>
   </header>
+
+  {#if !viewed}
 
   {#if file.symbols?.length > 0}
     <ul class="symbols">
@@ -112,7 +128,7 @@
             <span class="number">{row.old ?? ''}</span>
             <span class="number">{row.now ?? ''}</span>
             <span class="say">
-              {#if row.now !== null}
+              {#if row.now !== null && mayWrite && draft}
                 <button
                   class="add"
                   title={`Comment on line ${row.now}`}
@@ -120,6 +136,8 @@
                   onclick={() => {
                     writing = row.now;
                     text = '';
+                    suggestion = null;
+                    failed = '';
                   }}>+</button
                 >
               {/if}
@@ -133,23 +151,44 @@
                 <Thread {lane} comment={thread.comment} answers={thread.answers} {changed} />
               </div>
             {/each}
+            {#each draftsOn(row.now) as one (one.id)}
+              <div class="between">
+                <div class="draft">
+                  <p class="head"><span class="chip">waiting</span> <span class="faint">sent with your review</span></p>
+                  {#if one.text}<p class="text">{one.text}</p>{/if}
+                  {#if one.suggestion !== null && one.suggestion !== undefined}
+                    <pre class="suggested">{one.suggestion}</pre>
+                  {/if}
+                  <button class="quiet" onclick={() => undraft?.(one.id)}>Take it out</button>
+                </div>
+              </div>
+            {/each}
             {#if writing === row.now}
               <form
                 class="between"
                 onsubmit={(event) => {
                   event.preventDefault();
-                  comment();
+                  keep();
                 }}
               >
                 <textarea
                   bind:value={text}
-                  placeholder={`What is there to say about line ${row.now}? The agent in the lane is told.`}
+                  placeholder={`What is there to say about line ${row.now}? It is sent with your review, and its agent told.`}
                   aria-label={`Comment on line ${row.now}`}
                   use:focus
                 ></textarea>
+                {#if suggestion !== null}
+                  <p class="soft small">In the place of line {row.now}:</p>
+                  <textarea class="mono code-edit" bind:value={suggestion} aria-label="Suggested lines" spellcheck="false"></textarea>
+                {/if}
                 <div class="actions">
-                  <button class="primary" disabled={busy || text.trim().length < 2}>Comment</button>
-                  <button type="button" onclick={() => (writing = null)}>Cancel</button>
+                  <button class="primary">Add to review</button>
+                  {#if suggestion === null}
+                    <button type="button" onclick={() => (suggestion = lineText(row.now))}>Suggest a change</button>
+                  {:else}
+                    <button type="button" class="quiet" onclick={() => (suggestion = null)}>No suggestion</button>
+                  {/if}
+                  <button type="button" class="quiet" onclick={() => (writing = null)}>Cancel</button>
                 </div>
                 {#if failed}<p class="error">{failed}</p>{/if}
               </form>
@@ -160,6 +199,7 @@
     </div>
   {:else if !file.binary && file.change === 'renamed'}
     <p class="note soft">Renamed, with what is in it unchanged.</p>
+  {/if}
   {/if}
 </section>
 
@@ -296,6 +336,53 @@
     display: flex;
     gap: 6px;
     margin-top: 8px;
+  }
+  .viewed {
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+    font-size: 12px;
+    color: var(--soft);
+    cursor: pointer;
+  }
+  .draft {
+    border: 1px dashed var(--accent);
+    border-radius: 8px;
+    background: var(--panel);
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+  .draft .head {
+    margin: 0;
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    font-size: 12px;
+  }
+  .draft .text {
+    margin: 4px 0;
+    white-space: pre-wrap;
+  }
+  .suggested,
+  .code-edit {
+    margin: 4px 0;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: var(--added);
+    font: 12px/1.5 var(--mono);
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .code-edit {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 60px;
+    border: 1px solid var(--line);
+    color: var(--ink);
+  }
+  .small {
+    margin: 6px 0 0;
+    font-size: 12px;
   }
   .note {
     margin: 0;

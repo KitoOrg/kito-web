@@ -5,7 +5,6 @@
   import { ago, laneLink } from './api.js';
   import Conflicts from './Conflicts.svelte';
   import Face from './Face.svelte';
-  import Say from './Say.svelte';
   import Thread from './Thread.svelte';
 
   let {
@@ -34,8 +33,6 @@
 
   const who = (said) => (said.for ? `${said.by}, of ${said.for}` : said.by);
   const tone = { approved: 'ok', changes_requested: 'bad' };
-  // The verdict this person gave, if they gave one: theirs to take back.
-  let mine = $derived(verdicts.some((verdict) => user === null || verdict.by === user));
 </script>
 
 <ol class="timeline">
@@ -90,9 +87,6 @@
   <Conflicts {conflicts} {target} {changed} />
 {/if}
 
-{#if role !== 'read'}
-  <Say {lane} {mine} {changed} />
-{/if}
 
 <label class="soft toggle">
   <input type="checkbox" bind:checked={resolved} /> Show resolved comments

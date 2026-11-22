@@ -8,7 +8,7 @@ Kito: it asks the repository's daemon what `kito` asks, through the
 daemon's API (version 1, `docs/api.md` in Kito), within the permissions
 the repository gives it. Nothing of Kito is linked into it.
 
-## What it does (0.16)
+## What it does (0.17)
 
 - **The lanes** of a repository, as a list: where each stands, whose it
   is, what it declared, which other lanes are on the same code. The
@@ -159,6 +159,12 @@ kito-server serve --http 0.0.0.0:7443     # https://<the server>:7443/
   changed the server and who did it, or each request, with whether the
   log's chain is whole; the backups here and in S3, one made now, one
   downloaded.
+- **Review in the diff** (Kito 0.38): comments on lines wait as a
+  draft and go out with the verdict in one review; a comment may suggest
+  the lines to put in place, applied with one click or by the agent;
+  files are marked viewed until they change again; "since my review"
+  shows only what changed after your verdict; a bar at the bottom keeps
+  the review, the approvals, what stands in the way and Integrate at hand.
 - **Repositories**, for the server's admins (Kito 0.36): every one with
   who has it and its size; add one, empty or from a git address (a
   token used once); rename and archive; owners bring an archived one

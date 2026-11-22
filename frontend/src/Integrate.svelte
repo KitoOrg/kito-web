@@ -12,7 +12,7 @@
   let closing = $state(false);
   let busy = $state(false);
 
-  async function integrate() {
+  export async function integrate() {
     state = 'waiting';
     waiting = 'asked';
     failed = '';
