@@ -9,6 +9,7 @@
   import Log from './Log.svelte';
   import Logo from './Logo.svelte';
   import Notes from './Notes.svelte';
+  import People from './People.svelte';
   import SignIn from './SignIn.svelte';
   import Why from './Why.svelte';
 
@@ -104,7 +105,7 @@
     if (name === 'why' && rest.length > 0) {
       return { name: 'why', target: decodeURIComponent(rest.join('/')), lane: asked.get('lane') };
     }
-    if (['why', 'log', 'notes', 'admin'].includes(name)) return { name };
+    if (['why', 'log', 'notes', 'admin', 'people'].includes(name)) return { name };
     return { name: 'lanes' };
   });
   // The part of the client a page belongs to.
@@ -115,12 +116,15 @@
     document.title = about?.repository ? `${where}${about.repository} · Kito` : 'Kito';
   });
 
-  const parts = [
+  // Who uses a repository: for its maintainers and the server's admins.
+  let mayManage = $derived(role === 'maintain' || Boolean(who?.admin));
+  let parts = $derived([
     ['lanes', '#/', 'Lanes'],
     ['why', '#/why', 'Code and why'],
     ['log', '#/log', 'Log'],
     ['notes', '#/notes', 'Notes'],
-  ];
+    ...(about?.team && mayManage ? [['people', '#/people', 'People']] : []),
+  ]);
 </script>
 
 <header class="top">
@@ -147,6 +151,7 @@
       Needs you{#if seen?.needs.length > 0}<i>{seen.needs.length}</i>{/if}
     </a>
     {#if who.admin}
+      <a class="link" href={`${home}#/people`} aria-current={!repo && page.name === 'people' ? 'page' : undefined}>People</a>
       <a class="link" href="#/admin" aria-current={page.name === 'admin' ? 'page' : undefined}>Server plugins</a>
     {/if}
     <span class="who" title="Signed in">{who.user}</span>
@@ -186,6 +191,15 @@
         <p class="soft">Whoever runs this server says who they are, on its machine.</p>
       </div>
     {/if}
+  {:else if about.team && !repo && page.name === 'people'}
+    {#if who.admin}
+      <People {who} />
+    {:else}
+      <div class="panel closed">
+        <h1>For the server’s admins</h1>
+        <p class="soft">The people of a repository are on its own page, for its maintainers.</p>
+      </div>
+    {/if}
   {:else if about.team && !repo}
     <Home {seen} {who} />
   {:else if !about.known}
@@ -209,6 +223,10 @@
     <!-- The files, and one of them read with its reasons. -->
     {#key `${page.target ?? ''} ${page.lane ?? ''}`}
       <Code file={page.target ?? null} lane={page.lane ?? null} />
+    {/key}
+  {:else if page.name === 'people' && about.team && mayManage}
+    {#key repo}
+      <People {repo} {who} />
     {/key}
   {:else if page.name === 'log'}
     <Log />

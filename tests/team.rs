@@ -406,6 +406,56 @@ fn a_kito_server_serves_it_to_whoever_signs_in() {
     let me = request(&http, "GET", "/-/me", &[("Cookie", &carol)], None).json();
     assert_eq!(me["repos"], json!([{ "name": "shop", "role": "read" }]));
 
+    // The people of the server and of a repository, as the pages ask:
+    // for the server's admins, and for a repository's maintainers.
+    let people = |cookie: &str, method: &str, params: Value| {
+        let call = json!({ "method": method, "params": params });
+        request(
+            &http,
+            "POST",
+            "/-/people",
+            &[("Cookie", cookie), ("X-Kito", "1")],
+            Some(&call),
+        )
+    };
+    let members = |cookie: &str| {
+        let call = json!({ "method": "server.members", "params": {} });
+        request(
+            &http,
+            "POST",
+            "/-/api/shop",
+            &[("Cookie", cookie), ("X-Kito", "1")],
+            Some(&call),
+        )
+    };
+    assert_eq!(people(&ada, "server.people", json!({})).status, 403);
+    assert_eq!(members(&ada).status, 403);
+    ok(&["user", "role", "ada", "admin"]);
+    assert_eq!(
+        people(&ada, "server.people", json!({}))
+            .json()
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    let listed = members(&ada).json();
+    assert!(
+        listed["members"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m["user"] == "carol" && m["role"] == "read" && m["seen_ms"].is_u64()),
+        "{listed}"
+    );
+    let added = people(&ada, "server.people_add", json!({ "user": "dan" })).json();
+    assert!(
+        added["token"].as_str().unwrap().starts_with("kito_"),
+        "{added}"
+    );
+    assert_eq!(people(&carol, "server.people", json!({})).status, 403);
+    assert_eq!(members(&carol).status, 403);
+
     // What the client asks of a repository, the server answers as the
     // person: everything this plugin was given for ada, reading for carol.
     let ask = |cookie: &str, repo: &str, method: &str, params: Value| {

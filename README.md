@@ -8,7 +8,7 @@ Kito: it asks the repository's daemon what `kito` asks, through the
 daemon's API (version 1, `docs/api.md` in Kito), within the permissions
 the repository gives it. Nothing of Kito is linked into it.
 
-## What it does (0.10)
+## What it does (0.11)
 
 - **The lanes** of a repository, as a list: where each stands, whose it
   is, what it declared, which other lanes are on the same code. The
@@ -117,8 +117,17 @@ kito-server serve --http 0.0.0.0:7443     # https://<the server>:7443/
   and it answers to its server alone.
 - `kito-server plugin enable web --only read,pages` makes it a viewer
   for everybody.
-- **The server's plugins**, for its administrators (`kito-server user
-  admin <name>`, on the server's machine): what is installed and what
+- **People**, for a repository's maintainers and the server's admins
+  (Kito 0.30): who uses the repository and as what, when each was last
+  here, the lanes each has open; changing a role, taking the repository
+  away, giving it to somebody on the server. For admins, a page of
+  everybody on the server, their role there and the repositories each
+  was given, and adding somebody new: with a token, shown once with the
+  `kito connect` line to pass on, or by who they are for a way to sign in
+  that the server offers. Admins and owners are named by owners. A
+  change counts at once, in the connections that are open.
+- **The server's plugins**, for its admins (`kito-server user role
+  <name> admin`, on the server's machine): what is installed and what
   each was given, what the registry lists, and install, enable, disable
   and remove. A plugin is installed by its name from the server's
   registry and nothing else; what it is given is ticked before it is

@@ -86,6 +86,16 @@ export async function adminChange(body) {
   return read(response);
 }
 
+/** Behind a server: its people (`server.people`, `_add`, `_remove`, `_role`), as whoever is signed in. */
+export async function people(method, params = {}) {
+  const response = await fetch('/-/people', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-kito': '1' },
+    body: JSON.stringify({ method, params }),
+  });
+  return read(response);
+}
+
 /** Behind a server: the session ends. */
 export async function signOut() {
   return read(await fetch('/-/session', { method: 'DELETE' }));
