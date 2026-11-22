@@ -2,6 +2,7 @@
   import { behindServer, info, me, signOut } from './api.js';
   import { survey } from './needs.js';
   import { shell } from './shell.svelte.js';
+  import Account from './Account.svelte';
   import Admin from './Admin.svelte';
   import Audit from './Audit.svelte';
   import Backups from './Backups.svelte';
@@ -75,6 +76,13 @@
         said.repository = repo;
       }
       said.known = Boolean(repo);
+      // Back from linking an account at its provider: the page that was left.
+      const left = sessionStorage.getItem('kito-back');
+      sessionStorage.removeItem('kito-back');
+      if (left && who) {
+        location.hash = left;
+        route = left;
+      }
     }
     // What the head of each page says after its own name.
     shell.repo = said.repository ?? null;
@@ -154,7 +162,7 @@
     if (name === 'tasks') return { name, task: asked.get('task') };
     if (name === 'search') return { name, q: asked.get('q') ?? '' };
     if (name === 'insights') return { name };
-    if (name === 'audit' || name === 'backups' || name === 'repositories') return { name };
+    if (name === 'audit' || name === 'backups' || name === 'repositories' || name === 'account') return { name };
     if (name === 'kitchens') return { name, k: asked.get('k') };
     return { name: 'lanes' };
   });
@@ -259,6 +267,7 @@
           >
           <div class="drop right" class:shown={drop === 'me'}>
             <span class="signed small">Signed in as <b>{who.user}</b>{who.role ? `, ${who.role} of this server` : ''}</span>
+            <a href={`${home}#/account`} aria-current={page.name === 'account' ? 'page' : undefined}>Account</a>
             <button class="bare out" onclick={leave}>Sign out</button>
           </div>
         </div>
@@ -304,6 +313,9 @@
     {:else}
       <Repositories owner={who.role === 'owner'} />
     {/if}
+  {:else if about.team && page.name === 'account'}
+    <!-- One's own: how one signs in, whatever repository is looked at. -->
+    <Account {who} />
   {:else if about.team && page.name === 'kitchens'}
     <!-- The server's own, for whoever signed in: each sees the kitchens they may read. -->
     {#if running('kitchen')}

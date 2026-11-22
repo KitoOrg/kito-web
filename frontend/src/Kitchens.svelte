@@ -3,13 +3,17 @@
   // kitchens of the server, which repositories use each, and one kitchen
   // read part by part. Who may write in a kitchen changes its files here,
   // through a lane as any code; who maintains a repository says which
-  // kitchen it uses. A new one is started on the server's machine: an empty
-  // repository has no main lane a lane could start from.
-  import { askIn, focus, laneLink } from './api.js';
-  import { count, humanize, laneName, opName } from './format.js';
+  // kitchen it uses. An admin creates one here: a repository of the server
+  // that starts with its `kitchen.toml` (Kito 0.39.2). What goes in it is
+  // drafted by the person's own assistant, in a directory connected to it
+  // (kito-kitchen 0.5).
+  import { askIn, focus, laneLink, people } from './api.js';
+  import { connectLine, count, humanize, laneName, opName } from './format.js';
   import { changeIn, kindOf, manifest, partOf, readIn } from './kitchen.js';
   import { outcome } from './standing.js';
+  import { refresh } from './shell.svelte.js';
   import { toast } from './toast.svelte.js';
+  import CopyLine from './CopyLine.svelte';
   import Editor from './Editor.svelte';
   import Empty from './Empty.svelte';
   import Err from './Err.svelte';
@@ -87,6 +91,48 @@
   const MAY = { read: 'read it', write: 'write in it', integrate: 'integrate its lanes', maintain: 'maintain it' };
   const may = $derived(MAY[admin ? 'maintain' : roleIn(k)] ?? 'read it');
 
+  // ---- A new kitchen, for admins: its title, the repository it is, and the repositories it is for.
+  let creating = $state(null);
+  let createBusy = $state(false);
+  let createFailed = $state('');
+  // A name a repository can have, and one the server does not have yet.
+  const fits = (text) => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(text);
+  const taken = $derived(Boolean(creating) && (who?.repos ?? []).some((one) => one.name === creating.name.trim()));
+  // The repositories a kitchen can be for: those that are not kitchens themselves.
+  const candidates = $derived((seen ?? []).filter((one) => !one.toml));
+  // A text as TOML writes it.
+  const quoted = (text) => JSON.stringify(String(text));
+  const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  async function create(event) {
+    event.preventDefault();
+    const name = creating.name.trim();
+    const title = creating.title.trim() || name;
+    const made = candidates.filter((one) => creating.made[one.name]).map((one) => one.name);
+    createBusy = true;
+    createFailed = '';
+    try {
+      const toml = `name = ${quoted(title)}\nabout = "How we work on our repositories."\nfor = [${made.map(quoted).join(', ')}]\n`;
+      await people('server.repo_add', { name, files: [{ path: 'kitchen.toml', text: toml }] });
+      // A server that does not know `files` yet made an empty repository: said, not passed over.
+      if ((await readIn(name, 'kitchen.toml').catch(() => null)) === null) {
+        throw new Error(`${name} was added empty: this server needs Kito 0.39.2 to start a repository with its files`);
+      }
+      // The repositories it is for use it from now on: it gives nothing until its draft is integrated.
+      for (const repo of made) await askIn(repo, 'configure', { kitchen: `../${name}` });
+      // The shell asks again which repositories there are: the new one is among them.
+      refresh();
+      for (let tries = 0; tries < 20 && !who.repos.some((one) => one.name === name); tries += 1) await pause(150);
+      creating = null;
+      toast(`${title} created`);
+      location.hash = `#/kitchens?k=${encodeURIComponent(name)}`;
+    } catch (error) {
+      createFailed = error.message;
+      await survey();
+    }
+    createBusy = false;
+  }
+
   // ---- One kitchen: its files, and the one that is read.
   let files = $state(null);
   let filesFailed = $state('');
@@ -114,6 +160,11 @@
   $effect(() => {
     if (k) loadFiles();
   });
+
+  // Nothing in it yet but what says it is a kitchen: its draft is still to be written.
+  const bare = $derived(files !== null && files.every((path) => partOf(path) === '' && kindOf(path) === 'other'));
+  // The line that connects a directory to it, for the assistant that drafts it.
+  const connects = $derived(connectLine(who?.clients, k));
 
   const groups = $derived.by(() => {
     const all = files ?? [];
@@ -260,17 +311,54 @@
   }
 </script>
 
+{#snippet creator()}
+  <button class="primary" disabled={creating !== null} onclick={() => (creating = { name: 'kitchen', title: '', made: {} })}>
+    Create a kitchen
+  </button>
+{/snippet}
+
 {#if !k}
-  <PageHead title="Kitchens" docs="kitchens" />
+  <PageHead title="Kitchens" docs="kitchens" actions={admin ? creator : null} />
 
   <Err message={failed} />
+
+  {#if creating}
+    <form class="panel pad narrow form" onsubmit={create}>
+      <h3>Create a kitchen</h3>
+      <div class="fields">
+        <label class="field">
+          <span>Title</span>
+          <input bind:value={creating.title} placeholder="Shopworks" use:focus />
+        </label>
+        <label class="field">
+          <span>Repository</span>
+          <input class="mono" bind:value={creating.name} placeholder="kitchen" />
+          {#if taken}<span class="hint">The server has one of that name already.</span>{/if}
+        </label>
+      </div>
+      {#if candidates.length > 0}
+        <div class="box">
+          <h4>For</h4>
+          {#each candidates as one (one.name)}
+            <label class="check"><input type="checkbox" bind:checked={creating.made[one.name]} /> {one.name}</label>
+          {/each}
+          <p class="hint">They use it, and its draft is written from them.</p>
+        </div>
+      {/if}
+      <div class="controls">
+        <button class="primary" disabled={createBusy || taken || !fits(creating.name.trim())}>{createBusy ? 'Creating…' : 'Create'}</button>
+        <button type="button" class="quiet" onclick={() => (creating = null)}>Cancel</button>
+      </div>
+      <Err message={createFailed} />
+    </form>
+  {/if}
 
   <div class="stack">
 
     {#if kitchens === null}
       {#if !failed}<Loading lines={3} />{/if}
     {:else if kitchens.length === 0}
-      <Empty title="No kitchen yet">An admin of this server starts one.</Empty>
+      <Empty title="No kitchen yet">{#if !admin}An admin of this server creates one.{/if}</Empty>
     {:else}
       <div>
         <div class="cards">
@@ -306,6 +394,12 @@
     <p class="notice">It has no <code>kitchen.toml</code>: only its instructions are given.</p>
   {/if}
   <Err message={filesFailed} />
+  {#if bare && mayMaintain(k)}
+    <div class="result narrow">
+      <p><b>Nothing in it yet.</b> Your assistant drafts it with you, in a folder connected to it:</p>
+      <CopyLine text={connects} />
+    </div>
+  {/if}
 
   {#if files !== null || !filesFailed}
     <div class="cols left">

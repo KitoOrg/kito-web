@@ -4,14 +4,16 @@
   // everybody on the server, for its admins. The server decides who may
   // do what; this page only asks.
   import { ask, focus, laneLink, people, ways } from './api.js';
-  import { laneName } from './format.js';
+  import { connectLine, laneName } from './format.js';
   import { toast } from './toast.svelte.js';
   import Confirm from './Confirm.svelte';
+  import CopyLine from './CopyLine.svelte';
   import Empty from './Empty.svelte';
   import Err from './Err.svelte';
   import Icon from './Icon.svelte';
   import Loading from './Loading.svelte';
   import PageHead from './PageHead.svelte';
+  import SignsIn from './SignsIn.svelte';
   import Time from './Time.svelte';
 
   let { repo = null, who } = $props();
@@ -129,13 +131,8 @@
         if (email.trim()) params.email = email.trim();
         if (way !== 'token') params.identity = `${way}:${login.trim()}`;
         const said = await people('server.people_add', params);
-        const port = said.port ?? '7421';
-        const address = `${location.hostname}:${port}/${repo ?? '<repository>'}`;
-        // How the server is known: its fingerprint, or, on this machine and in the clear, --plain.
-        const known = said.plain ? ' --plain' : said.fingerprint ? ` --fingerprint ${said.fingerprint}` : '';
-        const line = said.token ? `kito connect ${address} --token ${said.token}${known}` : `kito connect ${address}${known}`;
         // The token is said this once: it is on the page before anything else can go wrong.
-        invited = { user, token: said.token, line, way };
+        invited = { user, token: said.token, line: connectLine(said, repo ?? '<repository>', said.token), way };
         if (repo) await ask('server.grant', { user, role: repoRole });
       } else {
         await ask('server.grant', { user, role: repoRole });
@@ -145,25 +142,25 @@
     });
   }
 
-  async function copy(text) {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast('Copied');
-    } catch {
-      toast('Not copied: select the line and copy it', 'warn');
-    }
-  }
+  // How a person signs in, and the panel that changes it for the one named.
+  // A server that does not say whether somebody has a token (before Kito
+  // 0.39.3) cannot change it either.
+  const says = $derived((everyone ?? []).some((one) => one.token !== undefined));
+  let editing = $state(null);
+  const edited = $derived((everyone ?? []).find((one) => one.user === editing) ?? null);
 
   const openLanes = (user) => lanes.filter((lane) => lane.owner === user && lane.state !== 'closed');
   // Those on the server who do not have this repository yet.
   const names = $derived((everyone ?? []).map((person) => person.user).filter((name) => !members?.some((m) => m.user === name)));
 </script>
 
-{#snippet person(one)}
+{#snippet person(one, logins = true)}
   <div class="items">
     <span class="row-title">{one.user}</span>
     {#if one.email}<span class="small soft">{one.email}</span>{/if}
-    {#each one.logins ?? [] as login}<span class="tag">{login}</span>{/each}
+    {#if logins}
+      {#each one.logins ?? [] as login}<span class="tag">{login}</span>{/each}
+    {/if}
   </div>
 {/snippet}
 
@@ -266,10 +263,7 @@
       </p>
       <button class="quiet sm icon" aria-label="Close" onclick={() => (invited = null)}><Icon name="close" /></button>
     </div>
-    <div class="copy">
-      <pre>{invited.line}</pre>
-      <button class="sm" onclick={() => copy(invited.line)}>Copy</button>
-    </div>
+    <CopyLine text={invited.line} />
   </div>
 {/if}
 
@@ -340,16 +334,36 @@
 {:else if everyone === null && !failed}
   <Loading />
 {:else if everyone}
+  {#if edited}
+    {#key edited.user}
+      <SignsIn user={edited.user} has={edited} ways={signIns} title={`How ${edited.user} signs in`} onclose={() => (editing = null)} onchange={load} />
+    {/key}
+  {/if}
   <div class="stack">
     <div class="panel table-wrap">
       <table>
         <thead>
-          <tr><th>Person</th><th>On the server</th><th>Repositories</th><th>Last here</th><th class="actions"><span class="sr">Actions</span></th></tr>
+          <tr>
+            <th>Person</th>
+            {#if says}<th>Signs in with</th>{/if}
+            <th>On the server</th>
+            <th>Repositories</th>
+            <th>Last here</th>
+            <th class="actions"><span class="sr">Actions</span></th>
+          </tr>
         </thead>
         <tbody>
           {#each everyone as one (one.user)}
             <tr>
-              <td>{@render person(one)}</td>
+              <td>{@render person(one, !says)}</td>
+              {#if says}
+                <td>
+                  <div class="items">
+                    {#if one.token}<span class="tag">token</span>{/if}
+                    {#each one.logins ?? [] as login}<span class="tag">{login}</span>{/each}
+                  </div>
+                </td>
+              {/if}
               <td>
                 <select
                   class="sm"
@@ -373,6 +387,13 @@
               </td>
               <td class="soft"><Time ms={one.seen_ms} /></td>
               <td class="actions">
+                {#if says && one.user === who.user}
+                  <a class="button quiet sm" href="#/account">Sign-in</a>
+                {:else if says && (owner || one.role === 'member')}
+                  <button class="quiet sm" aria-expanded={editing === one.user} onclick={() => (editing = editing === one.user ? null : one.user)}
+                    >Sign-in</button
+                  >
+                {/if}
                 {#if one.user !== who.user && (owner || one.role === 'member')}
                   <Confirm
                     sm
@@ -386,7 +407,7 @@
             </tr>
           {:else}
             <tr>
-              <td colspan="5"><Empty inset title="Nobody yet" /></td>
+              <td colspan={says ? 6 : 5}><Empty inset title="Nobody yet" /></td>
             </tr>
           {/each}
         </tbody>
@@ -405,16 +426,5 @@
     flex-wrap: wrap;
     align-items: baseline;
     gap: 2px 8px;
-  }
-  /* The line to pass on, and the button that copies it: a long line scrolls in its own box. */
-  .copy {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-  }
-  .copy pre {
-    flex: 1;
-    min-width: 0;
   }
 </style>

@@ -8,7 +8,7 @@ Kito: it asks the repository's daemon what `kito` asks, through the
 daemon's API (version 1, `docs/api.md` in Kito), within the permissions
 the repository gives it. Nothing of Kito is linked into it.
 
-## What it does (0.19)
+## What it does (0.20)
 
 - **The lanes** of a repository, as a list: where each stands, whose it
   is, what it declared, which other lanes are on the same code. The
@@ -66,9 +66,13 @@ the repository gives it. Nothing of Kito is linked into it.
   file, or writes a new concept or recipe, in the browser: a lane is
   opened for it, and integrated when they may integrate (else it waits
   there for somebody who may). Maintainers attach their repositories to
-  it from the kitchen's side, and an admin starts a new kitchen: a
-  repository with the files `kito-server kitchen new` writes. A
-  repository's Settings link to its kitchen.
+  it from the kitchen's side. An admin creates a kitchen here (Kito
+  0.39.2): its title, the repository it is, and the repositories it is
+  for. What goes in it is drafted by your own assistant (kito-kitchen
+  0.5): the page gives the line that connects a directory to the new
+  kitchen, and an assistant started there interviews you, reads what
+  those repositories already say and run, and writes the kitchen in one
+  lane for you to review. A repository's Settings link to its kitchen.
 - It follows the repository as it changes: no reloading.
 - **For a team**, behind a Kito server: the same client at the server's
   own address, for whoever signs in there, about the repositories they
@@ -140,6 +144,13 @@ kito-server serve --http 0.0.0.0:7443     # https://<the server>:7443/
   `kito connect` line to pass on, or by who they are for a way to sign in
   that the server offers. Admins and owners are named by owners. A
   change counts at once, in the connections that are open.
+- **How somebody signs in** (Kito 0.39.3): the page of everybody says
+  it for each person (a token, an account a plugin of the server knows,
+  or both), and an admin changes it from their row: a new token, shown
+  once, the token taken away, an account linked by its login or
+  unlinked. **Account**, under one's own name, is the same for oneself:
+  an account is linked there by signing in to it at its provider. Nobody
+  is left with no way to sign in.
 - **Search** (Kito 0.34), from a box in the top bar: reasons and what
   they changed, lanes, tasks, comments and notes, by words, kind, time,
   who (a person, an agent, an assistant or a model), where and outcome;

@@ -97,3 +97,15 @@ export const tasked = (lane) => Boolean(lane.task?.startsWith('task#'));
  * task of the repository is no title: it is named beside it.
  */
 export const laneTitle = (lane) => (tasked(lane) ? lane.intent : (lane.task ?? lane.intent)) ?? null;
+
+/**
+ * The line that connects a directory to a repository of the server this
+ * page is of. `clients`: how a client reaches it, as the server says it
+ * (its port, the fingerprint of its certificate, or that it is in the
+ * clear on this machine); `token`: one to sign in with, just made.
+ */
+export function connectLine(clients, repo, token = null) {
+  const address = `${location.hostname}:${clients?.port ?? '7421'}/${repo}`;
+  const known = clients?.plain ? ' --plain' : clients?.fingerprint ? ` --fingerprint ${clients.fingerprint}` : '';
+  return `kito connect ${address}${token ? ` --token ${token}` : ''}${known}`;
+}
