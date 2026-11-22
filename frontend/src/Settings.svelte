@@ -180,6 +180,14 @@
       </select>
       <button disabled={busy || kitchen === (now.kitchen ?? '').replace(/^\.\.\//, '')} onclick={saveKitchen}>Save</button>
     </div>
+    {#if now.kitchen}
+      <p class="faint">
+        <a href={`${location.pathname}#/kitchens?k=${encodeURIComponent(shown(now.kitchen))}`}>Open the kitchen {shown(now.kitchen)}</a>:
+        its behaviour, concepts, recipes and instructions, and who else uses it.
+      </p>
+    {:else}
+      <p class="faint"><a href={`${location.pathname}#/kitchens`}>The kitchens of this server</a></p>
+    {/if}
     {@render changes('kitchen')}
   </section>
   {:else if now.kitchen}

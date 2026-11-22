@@ -56,6 +56,19 @@ the repository gives it. Nothing of Kito is linked into it.
 - **The log** of the main lane: each checkpoint and the changes it holds.
 - **Notes**: every note on the repository's code; leaving one, removing
   one.
+- **Kitchens**, behind a server that runs the kitchen plugin
+  ([kito-kitchen](https://github.com/KitoOrg/kito-kitchen)), under the
+  Server menu: the kitchens of the server (a repository with a
+  `kitchen.toml`, or one another repository is attached to) and which
+  repositories use each. A kitchen is read part by part: its behaviour,
+  concepts, recipes, tools, instructions and parts, Markdown rendered,
+  each file with the changes made to it. Who may write in it changes a
+  file, or writes a new concept or recipe, in the browser: a lane is
+  opened for it, and integrated when they may integrate (else it waits
+  there for somebody who may). Maintainers attach their repositories to
+  it from the kitchen's side, and an admin starts a new kitchen: a
+  repository with the files `kito-server kitchen new` writes. A
+  repository's Settings link to its kitchen.
 - It follows the repository as it changes: no reloading.
 - **For a team**, behind a Kito server: the same client at the server's
   own address, for whoever signs in there, about the repositories they

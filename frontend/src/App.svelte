@@ -8,6 +8,7 @@
   import Code from './Code.svelte';
   import Home from './Home.svelte';
   import Insights from './Insights.svelte';
+  import Kitchens from './Kitchens.svelte';
   import Search from './Search.svelte';
   import Instructions from './Instructions.svelte';
   import Lane from './Lane.svelte';
@@ -134,6 +135,7 @@
     if (name === 'search') return { name, q: asked.get('q') ?? '' };
     if (name === 'insights') return { name };
     if (name === 'audit' || name === 'backups' || name === 'repositories') return { name };
+    if (name === 'kitchens') return { name, k: asked.get('k') };
     return { name: 'lanes' };
   });
   // The part of the client a page belongs to.
@@ -146,6 +148,8 @@
 
   // Who uses a repository: for its maintainers and the server's admins.
   let mayManage = $derived(role === 'maintain' || Boolean(who?.admin));
+  // The plugins that run on the server (Kito 0.36.2); one that does not say runs them all.
+  let running = $derived((name) => who?.plugins === undefined || who.plugins.includes(name));
   let parts = $derived([
     ['lanes', '#/', 'Lanes'],
     ['tasks', '#/tasks', 'Tasks'],
@@ -201,7 +205,7 @@
   {/if}
   {#if about?.team && who}
     {#if who.admin}
-      {@const serverPage = ['people', 'repositories', 'admin', 'audit', 'backups'].includes(page.name) && !(page.name === 'people' && repo)}
+      {@const serverPage = ['people', 'repositories', 'kitchens', 'admin', 'audit', 'backups'].includes(page.name) && !(page.name === 'people' && repo)}
       <div class="dropper">
         <button
           class="bare link toggle"
@@ -212,6 +216,9 @@
         <div class="drop" class:shown={drop === 'server'}>
           <a href={`${home}#/people`} aria-current={!repo && page.name === 'people' ? 'page' : undefined}>People</a>
           <a href={`${home}#/repositories`} aria-current={page.name === 'repositories' ? 'page' : undefined}>Repositories</a>
+          {#if running('kitchen')}
+            <a href={`${home}#/kitchens`} aria-current={page.name === 'kitchens' ? 'page' : undefined}>Kitchens</a>
+          {/if}
           <a href="#/admin" aria-current={page.name === 'admin' ? 'page' : undefined}>Plugins</a>
           <a href={`${home}#/audit`} aria-current={page.name === 'audit' ? 'page' : undefined}>Audit log</a>
           <a href={`${home}#/backups`} aria-current={page.name === 'backups' ? 'page' : undefined}>Backups</a>
@@ -270,6 +277,18 @@
       <div class="panel closed">
         <h1>For the server’s admins</h1>
         <p class="soft">The repositories, the audit log and the backups are for those who run this server.</p>
+      </div>
+    {/if}
+  {:else if about.team && page.name === 'kitchens'}
+    <!-- The server's own, for whoever signed in: each sees the kitchens they may read. -->
+    {#if running('kitchen')}
+      {#key page.k}
+        <Kitchens {who} k={page.k} />
+      {/key}
+    {:else}
+      <div class="panel closed">
+        <h1>No kitchen here</h1>
+        <p class="soft">The kitchen plugin does not run on this server: an admin enables it on the Plugins page.</p>
       </div>
     {/if}
   {:else if about.team && !repo && page.name === 'search'}

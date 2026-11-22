@@ -228,6 +228,8 @@ button.bare {
   font: inherit;
   white-space: normal;
   text-align: left;
+  justify-content: flex-start;
+  gap: 0;
 }
 a.button {
   display: inline-flex;
