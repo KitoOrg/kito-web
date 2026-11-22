@@ -4,12 +4,19 @@
   // comes from; what each assistant reads; who changed what. Anyone who
   // may write changes the repository's own; the kitchen's are changed in
   // the kitchen, through a lane.
-  import { ago, ask } from './api.js';
+  import { ask, focus } from './api.js';
   import { markdown } from './md.js';
+  import { toast } from './toast.svelte.js';
+  import Confirm from './Confirm.svelte';
+  import Editor from './Editor.svelte';
   import Empty from './Empty.svelte';
+  import Err from './Err.svelte';
+  import Icon from './Icon.svelte';
   import Loading from './Loading.svelte';
+  import PageHead from './PageHead.svelte';
+  import Time from './Time.svelte';
 
-  let { repo = null, who = null, role = null } = $props();
+  let { who = null, role = null } = $props();
 
   const assistants = [
     ['claude', 'Claude Code'],
@@ -17,22 +24,34 @@
     ['zcode', 'ZCode'],
   ];
   const folders = ['all', ...assistants.map(([name]) => name)];
+  // Whom the instructions of a folder are for, in words.
+  const forWhom = (folder) => (folder === 'all' ? 'Every assistant' : (assistants.find(([name]) => name === folder)?.[1] ?? folder));
 
   let told = $state(null);
   let history = $state([]);
   let failed = $state('');
-  let busy = $state(false);
-  // The instruction open in the editor: its name, the text being written, and whether it is new.
+  // The instruction that is shown: its name, its text, where it comes from, and whether it is new.
   let open = $state(null);
-  let text = $state('');
-  let showing = $state('edit');
-  // What one assistant is told, as its file reads.
+  // What one assistant is told, as its file reads: null while it is asked for.
   let previewFor = $state('claude');
-  let preview = $state('');
+  let preview = $state(null);
+  let previewFailed = $state('');
+  // While a row of the page does something, and why it could not: in the list, among the changes.
+  let busy = $state(false);
+  let listFailed = $state('');
+  let historyFailed = $state('');
 
   const mayWrite = $derived(role !== 'read');
   const kitchenRepo = $derived(told?.kitchen?.startsWith('../') ? told.kitchen.slice(3) : null);
   const mayOpenKitchen = $derived(kitchenRepo !== null && (who?.repos ?? []).some((one) => one.name === kitchenRepo));
+  // The kitchen's own page, on a server that has one; else the lanes of its repository.
+  const kitchenHref = $derived(
+    !mayOpenKitchen
+      ? null
+      : who.plugins === undefined || who.plugins.includes('kitchen')
+        ? `${location.pathname}#/kitchens?k=${encodeURIComponent(kitchenRepo)}`
+        : `${location.pathname}?repo=${encodeURIComponent(kitchenRepo)}#/`,
+  );
 
   async function load() {
     try {
@@ -45,314 +64,284 @@
     }
     loadPreview();
   }
-  async function loadPreview() {
+  // `anew`: for another assistant, so what is shown goes until its own is read.
+  async function loadPreview(anew = false) {
+    const assistant = previewFor;
+    if (anew) preview = null;
     try {
-      preview = (await ask('instructions_text', { assistant: previewFor })).text;
+      const { text } = await ask('instructions_text', { assistant });
+      if (assistant !== previewFor) return;
+      [preview, previewFailed] = [text, ''];
     } catch (error) {
-      preview = '';
+      if (assistant !== previewFor) return;
+      [preview, previewFailed] = ['', error.message];
     }
   }
   load();
 
-  function edit(item) {
-    open = { name: item.name, from: item.from, fresh: false };
-    text = item.text;
-    showing = 'edit';
+  // Each folder that has something, with its instructions and those of the kitchen that are disabled here.
+  const grouped = $derived.by(() => {
+    const items = told?.items ?? [];
+    const off = told?.removed ?? [];
+    const named = [...items.map((item) => item.name), ...off].map((name) => name.split('/')[0]);
+    return [...new Set([...folders, ...named])]
+      .map((folder) => ({
+        folder,
+        items: items.filter((item) => item.name.startsWith(`${folder}/`)),
+        off: off.filter((name) => name.startsWith(`${folder}/`)),
+      }))
+      .filter((group) => group.items.length + group.off.length > 0);
+  });
+
+  function show(item) {
+    open = { name: item.name, text: item.text, from: item.from, overrides: Boolean(item.overrides), fresh: false };
   }
+  let adding = $state(false);
   let fresh = $state({ folder: 'all', file: '' });
   function startNew(event) {
     event.preventDefault();
     const file = fresh.file.trim().toLowerCase().replace(/\.md$/, '');
     if (!file) return;
-    open = { name: `${fresh.folder}/${file}.md`, from: 'repository', fresh: true };
-    text = `# ${file}\n\n`;
-    showing = 'edit';
+    open = { name: `${fresh.folder}/${file}.md`, text: `# ${file}\n\n`, from: 'repository', overrides: false, fresh: true };
     fresh = { folder: 'all', file: '' };
+    adding = false;
   }
 
-  async function act(work) {
+  // What the editor does with the instruction it shows: asked of the
+  // repository, said when done, and the page read again without it open.
+  async function apply(method, params, done) {
+    const { name } = open;
+    await ask(method, { name, ...params });
+    toast(`${name} ${done}`);
+    if (open?.name === name) open = null;
+    await load();
+  }
+  const save = (text) => apply('instructions_set', { text }, 'saved');
+  const remove = () => apply('instructions_remove', {}, 'removed');
+  // An empty text of its own, over the kitchen's: the assistants are not told it here.
+  const disable = () => apply('instructions_set', { text: '' }, 'disabled here');
+
+  // What a row does: it says so when done, or why it could not under its list, and the page is read again.
+  async function act(work, done, fail) {
     busy = true;
-    failed = '';
+    fail('');
     try {
       await work();
+      toast(done);
     } catch (error) {
-      failed = error.message;
+      fail(error.message);
     }
     busy = false;
     await load();
   }
-  const save = () =>
-    act(async () => {
-      await ask('instructions_set', { name: open.name, text });
-      open = null;
-    });
-  const takeAway = (name) => act(() => ask('instructions_set', { name, text: '' }));
-  const removeOwn = (name) =>
-    confirm(`Remove this repository's ${name}?`) &&
-    act(async () => {
-      await ask('instructions_remove', { name });
-      if (open?.name === name) open = null;
-    });
-  const restore = (change) =>
-    confirm(`Put back ${change.name} as it was before ${change.by}'s change?`) &&
-    act(() =>
-      change.before === null || change.before === undefined
-        ? ask('instructions_remove', { name: change.name })
-        : ask('instructions_set', { name: change.name, text: change.before }),
-    );
+  const enable = (name) => act(() => ask('instructions_remove', { name }), `${name} enabled here`, (why) => (listFailed = why));
 
-  const whereFrom = (item) =>
-    item.from === 'kitchen' ? 'the kitchen' : item.overrides ? 'this repository, over the kitchen' : 'this repository';
-  const kitchenLink = (name) => `?repo=${encodeURIComponent(kitchenRepo)}#/why/${encodeURIComponent(`instructions/${name}`)}`;
-  const grouped = $derived(
-    folders
-      .map((folder) => [folder, (told?.items ?? []).filter((item) => item.name.startsWith(`${folder}/`))])
-      .filter(([, items]) => items.length > 0),
-  );
+  // A change is of the repository's own text of an instruction: what it was before, what it is after
+  // (null: none). An empty one is how the kitchen's is disabled here.
+  const before = (change) => change.before !== null && change.before !== undefined;
+  const did = (change) => {
+    if (change.after === null || change.after === undefined) return change.before?.trim() === '' ? 'Enabled' : 'Removed';
+    if (change.after.trim() === '') return 'Disabled';
+    return change.before ? 'Changed' : 'Wrote';
+  };
+  const restore = (change) => {
+    // What is shown may be the text that is put back over.
+    if (open?.name === change.name) open = null;
+    return act(
+      () => (before(change) ? ask('instructions_set', { name: change.name, text: change.before }) : ask('instructions_remove', { name: change.name })),
+      `${change.name} put back as before`,
+      (why) => (historyFailed = why),
+    );
+  };
 </script>
 
-<div class="page-head">
-  <div>
-    <h1>What the assistants are told{repo ? ` in ${repo}` : ''}</h1>
-    <p class="lead">
-      Kito's rules come first, then the kitchen's instructions, then this repository's own, which win where both have a
-      file of the same name. Kito writes them into <code>CLAUDE.md</code> and <code>AGENTS.md</code> at every session:
-      they are not in the repository.
+{#snippet overKitchen()}
+  Saving makes it this repository’s own, told here instead of the kitchen’s. What every repository that uses the kitchen
+  is told is changed {#if kitchenHref}<a href={kitchenHref}>in the kitchen</a>{:else}in the kitchen{/if}, through a lane.
+{/snippet}
+
+<PageHead title="Instructions">
+  {#snippet lead()}
+    What the assistants are told in this repository: Kito’s rules first, then the instructions of the kitchen it uses,
+    then its own, which win where both have a file of the same name. Kito writes them into <code>CLAUDE.md</code> and
+    <code>AGENTS.md</code> at every session: they are not in the repository.
+  {/snippet}
+</PageHead>
+
+<Err message={failed} />
+
+{#if told === null}
+  {#if !failed}<Loading lines={4} />{/if}
+{:else}
+  <div class="stack">
+    <p class="soft">
+      {#if !told.kitchen}
+        This repository uses the standard kitchen: Kito’s rules alone.
+      {:else}
+        This repository uses
+        {#if kitchenHref}<a href={kitchenHref}>{kitchenRepo}</a>{:else if kitchenRepo}{kitchenRepo}{:else}<span class="mono">{told.kitchen}</span>{/if}
+        as its kitchen{#if told.kitchen_found}.{:else}&nbsp;<span class="chip bad">not found</span>{/if}
+      {/if}
     </p>
-  </div>
-</div>
 
-{#if failed}<p class="error" role="alert">{failed}</p>{/if}
+    <div class="cols left">
+      <div class="stack">
+        <nav class="panel groups" aria-label="Instructions">
+          {#each grouped as group (group.folder)}
+            <h4>{forWhom(group.folder)}</h4>
+            <ul class="rows tight">
+              {#each group.items as item (item.name)}
+                <li>
+                  <button class="row bare" aria-current={open?.name === item.name ? 'true' : undefined} onclick={() => show(item)}>
+                    <span class="row-body">
+                      <span class="row-title mono">{item.name.slice(group.folder.length + 1)}</span>
+                      {#if item.overrides}<span class="row-meta">Over the kitchen’s</span>{/if}
+                    </span>
+                    <span class="tag">{item.from === 'kitchen' ? 'the kitchen' : 'this repository'}</span>
+                  </button>
+                </li>
+              {/each}
+              {#each group.off as name (name)}
+                <li>
+                  <div class="row">
+                    <span class="row-body">
+                      <span class="row-title mono faint">{name.slice(group.folder.length + 1)}</span>
+                      <span class="row-meta">The kitchen’s, disabled here</span>
+                    </span>
+                    {#if mayWrite}<button class="quiet sm" disabled={busy} onclick={() => enable(name)}>Enable</button>{/if}
+                  </div>
+                </li>
+              {/each}
+            </ul>
+          {:else}
+            <Empty inset title="Nothing beyond Kito’s rules yet" />
+          {/each}
+          {#if mayWrite}
+            <div class="panel-foot">
+              <form class="stack grow" onsubmit={startNew}>
+                <div><button type="button" class="sm" aria-expanded={adding} onclick={() => (adding = !adding)}>New</button></div>
+                {#if adding}
+                  <label class="field">
+                    <span>For</span>
+                    <select class="sm" bind:value={fresh.folder}>
+                      {#each folders as folder}<option value={folder}>{forWhom(folder)}</option>{/each}
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>Name</span>
+                    <input class="sm" bind:value={fresh.file} placeholder="style" use:focus />
+                  </label>
+                  <div class="controls">
+                    <button class="primary sm" disabled={!fresh.file.trim()}>Add</button>
+                    <button type="button" class="quiet sm" onclick={() => (adding = false)}>Cancel</button>
+                  </div>
+                {/if}
+              </form>
+            </div>
+          {/if}
+        </nav>
+        <Err message={listFailed} />
+      </div>
 
-{#if told === null && !failed}
-  <Loading lines={4} />
-{:else if told}
-  <p class="faint kitchen">
-    Kitchen:
-    {#if !told.kitchen}the standard one (Kito's rules alone)
-    {:else if mayOpenKitchen}<a href={`?repo=${encodeURIComponent(kitchenRepo)}#/why`}>{kitchenRepo}</a>
-    {:else}{kitchenRepo ?? told.kitchen}{/if}
-    {#if told.kitchen && !told.kitchen_found}<span class="chip bad">not found</span>{/if}
-  </p>
-
-  <div class="layout">
-    <section class="list">
-      {#each grouped as [folder, items]}
-        <h2>{folder === 'all' ? 'Every assistant' : assistants.find(([name]) => name === folder)?.[1] ?? folder}</h2>
-        {#each items as item (item.name)}
-          <div class="item" class:current={open?.name === item.name}>
-            <button class="bare name" onclick={() => edit(item)}>
-              <span class="mono">{item.name.split('/')[1]}</span>
-              <span class="chip {item.from === 'kitchen' ? '' : 'ok'}">{whereFrom(item)}</span>
-            </button>
-          </div>
-        {/each}
-      {:else}
-        <p class="soft">Nothing beyond Kito's rules yet.</p>
-      {/each}
-      {#each told.removed ?? [] as name}
-        <div class="item">
-          <span class="mono faint">{name}</span>
-          <span class="chip">the kitchen's, not told here</span>
-          {#if mayWrite}<button class="quiet sm" disabled={busy} onclick={() => removeOwn(name)}>Tell it again</button>{/if}
-        </div>
-      {/each}
-
-      {#if mayWrite}
-        <form class="new" onsubmit={startNew}>
-          <select bind:value={fresh.folder}>
-            {#each folders as folder}<option value={folder}>{folder === 'all' ? 'every assistant' : folder}</option>{/each}
-          </select>
-          <input placeholder="name, as style" bind:value={fresh.file} />
-          <button disabled={!fresh.file.trim()}>New</button>
-        </form>
-      {/if}
-    </section>
-
-    <section class="panel editor">
       {#if open}
-        <div class="head">
-          <span class="mono"><b>{open.name}</b></span>
-          <span class="grow"></span>
-          <div class="seg" role="group" aria-label="Text or preview">
-            <button aria-pressed={showing === 'edit'} onclick={() => (showing = 'edit')}>Text</button>
-            <button aria-pressed={showing === 'read'} onclick={() => (showing = 'read')}>Preview</button>
-          </div>
-        </div>
-        {#if open.from === 'kitchen' && !open.fresh}
-          <p class="faint">
-            From the kitchen{#if mayOpenKitchen}: <a href={kitchenLink(open.name)}>open it there</a>, and change it
-              through a lane{/if}. Saving here makes this repository's own, over the kitchen's.
-          </p>
-        {/if}
-        {#if showing === 'edit' && mayWrite}
-          <textarea class="mono" rows="18" bind:value={text}></textarea>
-        {:else}
-          <div class="rendered">{@html markdown(text)}</div>
-        {/if}
-        {#if mayWrite}
-          <div class="actions">
-            <button class="primary" disabled={busy || !text.trim()} onclick={save}>
-              {open.from === 'kitchen' && !open.fresh ? 'Save as this repository’s' : 'Save'}
-            </button>
-            {#if open.from === 'kitchen' && !open.fresh}
-              <button disabled={busy} onclick={() => takeAway(open.name)}>Don’t tell it here</button>
-            {:else if !open.fresh}
-              <button class="quiet" disabled={busy} onclick={() => removeOwn(open.name)}>Remove</button>
-            {/if}
-            <button class="quiet" onclick={() => (open = null)}>Close</button>
-          </div>
-        {/if}
+        {#key open}
+          <Editor
+            name={open.name}
+            mono
+            text={open.text}
+            fresh={open.fresh}
+            editable={mayWrite}
+            onsave={save}
+            oncancel={() => (open = null)}
+            onremove={!mayWrite || open.fresh ? null : open.from === 'kitchen' ? disable : remove}
+            removeLabel={open.from === 'kitchen' ? 'Disable' : 'Remove'}
+            removeAsk={open.from === 'kitchen'
+              ? `Disable ${open.name} in this repository? Its assistants are no longer told it; the kitchen keeps it.`
+              : open.overrides
+                ? `Remove ${open.name} from this repository? The kitchen’s instruction of that name is told again.`
+                : `Remove ${open.name} from this repository? The assistants are no longer told it.`}
+            hint={open.from === 'kitchen' && !open.fresh ? overKitchen : null}
+          >
+            {#snippet head()}
+              {#if !open?.fresh}
+                <button class="quiet sm icon" aria-label="Close" onclick={() => (open = null)}><Icon name="close" /></button>
+              {/if}
+            {/snippet}
+          </Editor>
+        {/key}
       {:else}
-        <div class="head">
-          <span>What</span>
-          <select bind:value={previewFor} onchange={loadPreview}>
-            {#each assistants as [name, title]}<option value={name}>{title}</option>{/each}
-          </select>
-          <span>reads</span>
-        </div>
-        <div class="rendered">{@html markdown(preview.replace(/^<!--.*-->$/gm, ''))}</div>
+        <section class="panel">
+          <div class="panel-head">
+            <h3>What an assistant reads</h3>
+            <span class="grow"></span>
+            <select class="sm" aria-label="Assistant" bind:value={previewFor} onchange={() => loadPreview(true)}>
+              {#each assistants as [name, title]}<option value={name}>{title}</option>{/each}
+            </select>
+          </div>
+          {#if preview === null}
+            <Loading inset lines={6} />
+          {:else if previewFailed}
+            <div class="pad"><Err message={previewFailed} /></div>
+          {:else}
+            <div class="rendered pad reads">{@html markdown(preview.replace(/^<!--.*-->$/gm, ''))}</div>
+          {/if}
+        </section>
       {/if}
-    </section>
+    </div>
   </div>
 
   <h2 class="section-title">Changes</h2>
-  {#if history.length === 0}
-    <Empty title="No change yet.">Who writes, changes or removes an instruction here is kept, with a way to put it back.</Empty>
-  {:else}
-    <div class="panel changes">
-      {#each history as change}
-        <div class="change">
-          <span><b>{change.by}</b> {change.after === null || change.after === undefined ? 'removed' : change.before ? 'changed' : 'wrote'} <span class="mono">{change.name}</span></span>
-          <span class="faint">{ago(change.at_ms)}</span>
-          <span class="grow"></span>
-          {#if mayWrite}<button class="quiet sm" disabled={busy} onclick={() => restore(change)}>Put back as before</button>{/if}
-        </div>
-      {/each}
+  <div class="stack">
+    <div class="panel table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Who</th><th>What</th><th>When</th>
+            {#if mayWrite}<th class="actions"><span class="sr">Put back</span></th>{/if}
+          </tr>
+        </thead>
+        <tbody>
+          {#each history as change}
+            <tr>
+              <td>{change.by}</td>
+              <td>{did(change)} <span class="mono">{change.name}</span></td>
+              <td class="soft"><Time ms={change.at_ms} /></td>
+              {#if mayWrite}
+                <td class="actions">
+                  <Confirm
+                    label="Put back as before"
+                    ask={before(change)
+                      ? `Put back ${change.name} as it was before ${change.by}’s change? The text this repository has of it now is replaced.`
+                      : `Put back ${change.name} as it was before ${change.by}’s change? This repository had no text of its own then: the one it has now is removed.`}
+                    yes="Put back"
+                    working="Putting back…"
+                    onyes={() => restore(change)}
+                    disabled={busy}
+                    sm
+                  />
+                </td>
+              {/if}
+            </tr>
+          {:else}
+            <tr>
+              <td colspan={mayWrite ? 4 : 3}>
+                <Empty inset title="No change yet">
+                  Who writes, changes or removes an instruction here is kept, with a way to put it back.
+                </Empty>
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
     </div>
-  {/if}
+    <Err message={historyFailed} />
+  </div>
 {/if}
 
 <style>
-  .kitchen {
-    margin: 0 0 12px;
-    font-size: 13px;
-  }
-  .layout {
-    display: grid;
-    grid-template-columns: minmax(220px, 280px) 1fr;
-    gap: 16px;
-    align-items: start;
-    margin: 0 0 8px;
-  }
-  @media (max-width: 760px) {
-    .layout {
-      grid-template-columns: 1fr;
-    }
-  }
-  .list h2 {
-    margin: 16px 0 6px;
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--soft);
-  }
-  .list h2:first-child {
-    margin-top: 0;
-  }
-  .item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-wrap: wrap;
-    margin: 2px 0;
-    font-size: 13px;
-  }
-  .item .name {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    width: 100%;
-    min-height: 32px;
-    padding: 0 8px;
-    border: 1px solid transparent;
-    border-radius: var(--radius);
-    color: inherit;
-    cursor: pointer;
-  }
-  .item .name:hover {
-    background: var(--hover);
-  }
-  .item.current .name {
-    border-color: var(--line);
-    background: var(--panel);
-  }
-  .new {
-    display: flex;
-    gap: 6px;
-    margin-top: 12px;
-  }
-  .new input {
-    flex: 1;
-    min-width: 0;
-  }
-  .editor {
-    padding: 16px;
-    min-height: 300px;
-    display: grid;
-    gap: 10px;
-    align-content: start;
-  }
-  .editor > p {
-    margin: 0;
-    font-size: 13px;
-  }
-  .head {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-  }
-  .grow {
-    flex: 1;
-  }
-  textarea {
-    font-family: var(--mono);
-    font-size: 12.5px;
-  }
-  .actions {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-  .rendered {
-    font-size: 14px;
-    line-height: 1.6;
+  /* What an assistant reads is long: it scrolls in its own box. */
+  .reads {
     max-height: 60vh;
     overflow: auto;
-  }
-  .rendered :global(pre) {
-    background: var(--bg);
-    border: 1px solid var(--line);
-    padding: 8px 10px;
-    border-radius: 6px;
-    overflow: auto;
-  }
-  .changes {
-    overflow: hidden;
-  }
-  .change {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    min-height: 40px;
-    padding: 4px 16px;
-    font-size: 13px;
-    flex-wrap: wrap;
-  }
-  .change + .change {
-    border-top: 1px solid var(--line);
-  }
-  .change b {
-    font-weight: 600;
   }
 </style>

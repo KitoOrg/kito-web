@@ -1,338 +1,408 @@
 <script>
   // Tasks (Kito 0.33): what needs doing in a repository, as a board by
   // where each stands, and one task with its lanes and what was said on
-  // it. Anyone who may write asks for tasks, says whom they are for,
+  // it. Anyone who may write adds tasks, says whom they are for,
   // comments, and closes them; a task is never closed by Kito itself.
-  import { ago, ask, laneLink } from './api.js';
+  import { ask, focus, laneLink, taskLink } from './api.js';
+  import { count, sentence, who } from './format.js';
   import { markdown } from './md.js';
+  import { standing, taskStanding, taskWords, TASK_PLACES } from './standing.js';
+  import { toast } from './toast.svelte.js';
+  import Confirm from './Confirm.svelte';
+  import Empty from './Empty.svelte';
+  import Err from './Err.svelte';
+  import Icon from './Icon.svelte';
   import Loading from './Loading.svelte';
+  import PageHead from './PageHead.svelte';
+  import State from './State.svelte';
+  import Time from './Time.svelte';
 
+  // `open`: the task the address names (`#/tasks?task=task%231`), if any.
   let { role = null, user = null, open: opened = null } = $props();
 
-  const columns = [
-    ['open', 'To do'],
-    ['in_lane', 'In a lane'],
-    ['ready', 'Ready to close'],
-    ['done', 'Done'],
-  ];
-
   let tasks = $state(null);
-  let failed = $state('');
-  let busy = $state(false);
-  let showDropped = $state(false);
+  let loadFailed = $state('');
   // The task looked at, whole.
   let shown = $state(null);
+  // What is being done now (`add`, `close`…): its button says so, the others wait.
+  let busy = $state('');
+  // What did not work, and where it was asked (`shown`: the task to look
+  // at, `board`: a card moved): it is said under those controls.
+  let failed = $state({ at: '', message: '' });
   let comment = $state('');
   let assignee = $state('');
   let adding = $state(null);
   let dragged = $state(null);
 
   const mayWrite = $derived(role !== 'read');
+  const failedAt = (at) => (failed.at === at ? failed.message : '');
 
   async function load() {
     try {
       tasks = await ask('tasks', { state: 'all' });
-      failed = '';
-      if (shown) await show(shown.id);
+      loadFailed = '';
     } catch (error) {
-      failed = error.message;
+      loadFailed = error.message;
     }
   }
   async function show(id) {
+    const asked = opened;
     try {
-      shown = await ask('task', { task: id });
-      assignee = shown.for ?? '';
+      const task = await ask('task', { task: id });
+      // A task says only the state of each of its lanes. Where an open one
+      // stands, with its review and its conflicts, is the repository's to say.
+      const open = task.lanes.some((lane) => lane.state !== 'closed') ? await ask('lanes').catch(() => []) : [];
+      // The address may have moved on while it was asked for.
+      if (opened !== asked) return;
+      task.lanes = task.lanes.map((lane) => open.find((one) => one.id === lane.id) ?? lane);
+      shown = task;
+      assignee = task.for ?? '';
+      if (failed.at === 'shown') failed = { at: '', message: '' };
     } catch (error) {
-      failed = error.message;
+      if (opened === asked) failed = { at: 'shown', message: error.message };
     }
   }
-  load().then(() => opened && show(opened));
+  load();
+  // The task shown is the one the address names: a card is a link to it,
+  // and going back leaves it.
+  $effect(() => {
+    shown = null;
+    if (opened) show(opened);
+  });
 
-  async function act(work) {
-    busy = true;
-    failed = '';
+  // One thing done to a task: its button waits, it is said, and what it
+  // changed is read again. `work` may answer what to say.
+  async function act(what, at, work, said = null) {
+    busy = what;
+    failed = { at: '', message: '' };
     try {
-      await work();
+      const told = await work();
+      toast(said ?? told);
     } catch (error) {
-      failed = error.message;
+      failed = { at, message: error.message };
     }
-    busy = false;
-    await load();
+    busy = '';
+    await Promise.all([load(), shown ? show(shown.id) : null]);
   }
 
-  const close = (id) => act(() => ask('task_done', { task: id }));
-  const reopen = (id) => act(() => ask('task_reopen', { task: id }));
-  const drop = (id) => confirm(`Drop ${id}? Nobody will do it.`) && act(() => ask('task_drop', { task: id }));
-  const assign = () => act(() => ask('task_update', { task: shown.id, for: assignee.trim() }));
+  const close = (id, at = 'task') => act('close', at, () => ask('task_done', { task: id }), `${id} closed as done`);
+  const reopen = (id, at = 'task') => act('reopen', at, () => ask('task_reopen', { task: id }), `${id} reopened`);
+  const drop = (id) => act('drop', 'task', () => ask('task_drop', { task: id }), `${id} dropped`);
+  function assign(event) {
+    event.preventDefault();
+    const whom = assignee.trim();
+    act('for', 'for', () => ask('task_update', { task: shown.id, for: whom }), `${shown.id} is for ${whom || 'nobody'}`);
+  }
   function say(event) {
     event.preventDefault();
     if (!comment.trim()) return;
-    act(async () => {
-      await ask('task_comment', { task: shown.id, text: comment });
-      comment = '';
-    });
+    act(
+      'comment',
+      'comment',
+      async () => {
+        await ask('task_comment', { task: shown.id, text: comment });
+        comment = '';
+      },
+      'Comment added',
+    );
   }
   function add(event) {
     event.preventDefault();
     const it = adding;
     if (!it.title.trim()) return;
-    act(async () => {
+    act('add', 'add', async () => {
       const made = await ask('task_add', { title: it.title, text: it.text, for: it.for.trim() || null });
       adding = null;
-      shown = made;
+      // The new task is the one to look at.
+      location.hash = taskLink(made.id);
+      return `${made.id} added`;
     });
   }
 
   // A card dropped on a column: done, or open again.
-  function droppedOn(column) {
+  function droppedOn(place) {
     const task = tasks?.find((one) => one.id === dragged);
     dragged = null;
     if (!task || !mayWrite) return;
-    if (column === 'done' && task.state !== 'done') close(task.id);
-    else if (column !== 'done' && ['done', 'dropped'].includes(task.state)) reopen(task.id);
+    if (place === 'done' && task.state !== 'done') close(task.id, 'board');
+    else if (place !== 'done' && ['done', 'dropped'].includes(task.state)) reopen(task.id, 'board');
   }
 
-  const inColumn = (column) => (tasks ?? []).filter((task) => task.state === column);
+  // A column holds the tasks that stand there: one an agent thinks done is ready to close.
+  const inColumn = (place) => (tasks ?? []).filter((task) => taskStanding(task).place === place);
   const dropped = $derived((tasks ?? []).filter((task) => task.state === 'dropped'));
 </script>
 
-<div class="page-head">
-  <div>
-    <h1>Tasks</h1>
-    <p class="lead">
-      What needs doing here, and the lanes that do it. Open a lane for a task with <code>kito lane open … --task task#3</code>;
-      agents take one up when you tell them to. A task is closed by a person, once its lanes are.
-    </p>
-  </div>
-  {#if mayWrite}
-    <div class="actions">
-      <button class="primary" onclick={() => (adding = { title: '', text: '', for: '' })}>Ask for something</button>
-    </div>
-  {/if}
-</div>
-{#if failed}<p class="error" role="alert">{failed}</p>{/if}
+{#snippet adder()}
+  <button class="primary" disabled={adding !== null} onclick={() => (adding = { title: '', text: '', for: '' })}>Add a task</button>
+{/snippet}
+
+<PageHead
+  title="Tasks"
+  lead="What needs doing here, and the lanes that do it. A task is closed by a person, once its lanes are."
+  actions={mayWrite ? adder : null}
+/>
+<Err message={loadFailed || failedAt('shown') || failedAt('board')} />
 
 {#if adding}
-  <form class="panel add" onsubmit={add}>
-    <input placeholder="What needs doing" bind:value={adding.title} />
-    <textarea rows="4" placeholder="More about it (markdown)" bind:value={adding.text}></textarea>
-    <div class="row">
-      <input placeholder="For whom (a person or an agent)" bind:value={adding.for} />
-      <button class="primary" disabled={busy || !adding.title.trim()}>Add</button>
+  <form class="panel pad narrow form" onsubmit={add}>
+    <h3>Add a task</h3>
+    <label class="field">
+      <span>What needs doing</span>
+      <input bind:value={adding.title} placeholder="Prices in cents" use:focus />
+    </label>
+    <label class="field">
+      <span>More about it</span>
+      <textarea rows="4" bind:value={adding.text}></textarea>
+      <span class="hint">Markdown. Whoever takes it up reads this first.</span>
+    </label>
+    <label class="field">
+      <span>For</span>
+      <input bind:value={adding.for} placeholder="bob" />
+      <span class="hint">A person or an agent. Left empty, it is for nobody yet.</span>
+    </label>
+    <div class="controls">
+      <button class="primary" disabled={busy !== '' || !adding.title.trim()}>{busy === 'add' ? 'Adding…' : 'Add'}</button>
       <button type="button" class="quiet" onclick={() => (adding = null)}>Cancel</button>
     </div>
+    <Err message={failedAt('add')} />
   </form>
 {/if}
 
-{#if tasks === null && !failed}
-  <Loading />
-{:else if tasks}
-  <div class="board">
-    {#each columns as [column, title]}
-      <section
-        class="column"
-        role="list"
-        ondragover={(event) => event.preventDefault()}
-        ondrop={() => droppedOn(column)}
-      >
-        <h2>{title} <span class="faint">{inColumn(column).length}</span></h2>
-        {#each inColumn(column) as task (task.id)}
-          <button
-            class="bare card panel"
-            class:current={shown?.id === task.id}
-            draggable={mayWrite}
-            ondragstart={() => (dragged = task.id)}
-            onclick={() => show(task.id)}
-          >
-            <span class="mono faint">{task.id}</span>
-            <span class="title">{task.title}</span>
-            <span class="meta">
-              {#if task.for}<span class="chip" class:mine={task.for === user}>for {task.for}</span>{/if}
-              {#if task.claimed_by}<span class="chip">{task.claimed_by}</span>{/if}
-              {#each task.lanes as lane}<span class="chip">{lane.id.replace('lane/', '#')}</span>{/each}
-              {#if task.comment_count > 0}<span class="faint">💬 {task.comment_count}</span>{/if}
-              {#if task.thinks_done}<span class="chip ok">{task.thinks_done} thinks it is done</span>{/if}
-            </span>
-          </button>
-        {/each}
-      </section>
-    {/each}
-  </div>
-  {#if dropped.length > 0}
-    <button class="quiet sm" onclick={() => (showDropped = !showDropped)}>{showDropped ? 'Hide' : 'Show'} {dropped.length} dropped</button>
-    {#if showDropped}
-      {#each dropped as task}<button class="quiet sm mono" onclick={() => show(task.id)}>{task.id} {task.title}</button>{/each}
-    {/if}
-  {/if}
-
+{#if opened}
   {#if shown}
-    <section class="panel detail">
-      <div class="row">
-        <span class="mono faint">{shown.id}</span>
-        <h2>{shown.title}</h2>
+    {@const stands = taskStanding(shown)}
+    <section class="panel narrow detail">
+      <div class="panel-head">
+        <h3>{shown.title}</h3>
+        <State task={shown} />
         <span class="grow"></span>
-        <button class="quiet sm" onclick={() => (shown = null)}>Close</button>
+        <a class="button quiet sm" href="#/tasks" aria-label="Close"><Icon name="close" /></a>
       </div>
-      <p class="faint">
-        Asked for by {shown.by}, {ago(shown.at_ms)}{#if shown.claimed_by}; taken up by {shown.claimed_by}{/if}{#if shown.source?.url}; from <a href={shown.source.url} target="_blank" rel="noreferrer">{shown.source.kind ?? 'elsewhere'}</a>{/if}.
-      </p>
-      {#if shown.text}<div class="rendered">{@html markdown(shown.text)}</div>{/if}
+      <div class="pad stack">
+        <p class="soft small">
+          <span class="ref">{shown.id}</span> · asked for by {shown.by}
+          <Time ms={shown.at_ms} />
+          {#if !mayWrite && shown.for}· for {shown.for}{/if}
+          {#if shown.claimed_by}· taken up by {shown.claimed_by}{/if}
+          {#if shown.source?.url}
+            · from
+            <a href={shown.source.url} target="_blank" rel="noreferrer">{shown.source.kind ?? 'elsewhere'} <Icon name="external" size={12} /></a>
+          {/if}
+        </p>
+        {#if shown.text}<div class="rendered">{@html markdown(shown.text)}</div>{/if}
 
-      <div class="row">
-        <strong class="label">Lanes</strong>
-        {#each shown.lanes as lane}
-          <a class="chip" href={laneLink(lane.id)}>{lane.id} · {lane.agent} · {lane.state}</a>
-        {:else}<span class="faint">none yet</span>{/each}
-      </div>
-
-      {#if mayWrite}
-        <div class="row">
-          <strong class="label">For</strong>
-          <input placeholder="nobody" bind:value={assignee} />
-          <button disabled={busy || assignee.trim() === (shown.for ?? '')} onclick={assign}>Save</button>
-          <span class="grow"></span>
-          {#if ['done', 'dropped'].includes(shown.state)}
-            <button disabled={busy} onclick={() => reopen(shown.id)}>Reopen</button>
+        <div class="box">
+          <h4>Lanes</h4>
+          {#if shown.lanes.length > 0}
+            <ul class="panel rows tight">
+              {#each shown.lanes as lane (lane.id)}
+                <li>
+                  <a class="row" href={laneLink(lane.id)}>
+                    <span class={['ring', standing(lane).tone]} aria-hidden="true"></span>
+                    <span class="row-body"><span><span class="ref">{lane.id}</span> · {who(lane.agent, lane.owner)}</span></span>
+                    <span class="row-side"><State {lane} plain /></span>
+                  </a>
+                </li>
+              {/each}
+            </ul>
           {:else}
-            <button class="primary" disabled={busy} onclick={() => close(shown.id)}>
-              {shown.state === 'ready' || shown.thinks_done ? 'It is done' : 'Close as done'}
-            </button>
-            <button class="quiet" disabled={busy} onclick={() => drop(shown.id)}>Drop</button>
+            <span class="none">None yet</span>
           {/if}
         </div>
-      {/if}
 
-      <h3>What was said</h3>
-      {#each shown.comments ?? [] as said}
-        <div class="said">
-          <span><b>{said.by}</b> <span class="faint">{ago(said.at_ms)}</span></span>
-          <div class="rendered">{@html markdown(said.text)}</div>
+        {#if mayWrite}
+          <form class="field" onsubmit={assign}>
+            <label for="task-for">For</label>
+            <div class="controls">
+              <input id="task-for" bind:value={assignee} placeholder="bob" />
+              <button class="primary" disabled={busy !== '' || assignee.trim() === (shown.for ?? '')}>{busy === 'for' ? 'Saving…' : 'Save'}</button>
+            </div>
+            <span class="hint">A person or an agent. Left empty, it is for nobody.</span>
+          </form>
+          <Err message={failedAt('for')} />
+          <div class="controls">
+            {#if ['done', 'dropped'].includes(shown.state)}
+              <button disabled={busy !== ''} onclick={() => reopen(shown.id)}>{busy === 'reopen' ? 'Reopening…' : 'Reopen'}</button>
+            {:else}
+              <button class={[stands.place === 'ready' && 'primary']} disabled={busy !== ''} onclick={() => close(shown.id)}>
+                {busy === 'close' ? 'Closing…' : 'Close as done'}
+              </button>
+              <span class="grow"></span>
+              <Confirm
+                label="Drop"
+                ask={`Drop ${shown.id}? Nobody will do it; it can be reopened later.`}
+                working="Dropping…"
+                disabled={busy !== ''}
+                onyes={() => drop(shown.id)}
+              />
+            {/if}
+          </div>
+          <Err message={failedAt('task')} />
+        {/if}
+
+        <div class="box">
+          <h4>Comments</h4>
+          {#each shown.comments ?? [] as said (said.n)}
+            <div>
+              <p><b>{said.by}</b> <span class="small faint"><Time ms={said.at_ms} /></span></p>
+              <div class="rendered">{@html markdown(said.text)}</div>
+            </div>
+          {:else}
+            <span class="none">None yet</span>
+          {/each}
+          {#if mayWrite}
+            <form class="box" onsubmit={say}>
+              <textarea rows="3" bind:value={comment} aria-label="Comment"></textarea>
+              <span class="hint">The agents in its lanes are told.</span>
+              <div class="controls">
+                <button disabled={busy !== '' || !comment.trim()}>{busy === 'comment' ? 'Commenting…' : 'Comment'}</button>
+              </div>
+              <Err message={failedAt('comment')} />
+            </form>
+          {/if}
         </div>
-      {:else}<p class="faint">Nothing yet.</p>{/each}
-      {#if mayWrite}
-        <form class="row" onsubmit={say}>
-          <input class="wide" placeholder="Say something: the agents in its lanes are told" bind:value={comment} />
-          <button disabled={busy || !comment.trim()}>Say it</button>
-        </form>
-      {/if}
+      </div>
     </section>
+  {:else if !failedAt('shown')}
+    <Loading />
   {/if}
 {/if}
 
+{#if tasks === null}
+  {#if !loadFailed}<Loading />{/if}
+{:else if tasks.length === 0}
+  <Empty title="No tasks yet">
+    {#if mayWrite}Add one: what needs doing, and whom it is for.{:else}Whoever may write here adds them.{/if}
+  </Empty>
+{:else}
+  <div class="board">
+    {#each TASK_PLACES as place (place)}
+      {@const there = inColumn(place)}
+      {@const title = sentence(taskWords(place))}
+      <div
+        class="column"
+        role="group"
+        aria-label={title}
+        ondragover={(event) => event.preventDefault()}
+        ondrop={(event) => {
+          // A card is a link: dropped, it is not to be opened.
+          event.preventDefault();
+          droppedOn(place);
+        }}
+      >
+        <div class="column-head"><h3>{title}</h3><span class="count">{there.length}</span></div>
+        {#each there as task (task.id)}
+          <a
+            class="panel pad card"
+            href={taskLink(task.id)}
+            aria-current={task.id === shown?.id ? 'true' : undefined}
+            draggable={mayWrite}
+            ondragstart={() => (dragged = task.id)}
+          >
+            <span class="row-title">{task.title}</span>
+            <span class="row-meta facts">
+              <span class="ref">{task.id}</span>
+              {#if task.for}<span>for {task.for === user ? 'you' : task.for}</span>{/if}
+              {#if task.claimed_by}<span>taken up by {task.claimed_by}</span>{/if}
+              {#each task.lanes as lane (lane.id)}<span class="ref">{lane.id}</span>{/each}
+              {#if task.comment_count > 0}
+                <span>
+                  <span aria-hidden="true"><Icon name="comment" size={14} /> {task.comment_count}</span>
+                  <span class="sr">{count(task.comment_count, 'comment')}</span>
+                </span>
+              {/if}
+            </span>
+            {#if task.thinks_done}<span class="row-meta">{task.thinks_done} thinks it is done</span>{/if}
+          </a>
+        {:else}
+          <p class="none inset">None</p>
+        {/each}
+      </div>
+    {/each}
+  </div>
+  {#if dropped.length > 0}
+    <details>
+      <summary>{count(dropped.length, 'dropped task')}</summary>
+      <ul class="panel rows tight">
+        {#each dropped as task (task.id)}
+          <li>
+            <a class="row" href={taskLink(task.id)} aria-current={task.id === shown?.id ? 'true' : undefined}>
+              <span class="ref">{task.id}</span>
+              <span class="row-title">{task.title}</span>
+            </a>
+          </li>
+        {/each}
+      </ul>
+    </details>
+  {/if}
+  <p class="footnote">
+    A lane is opened for a task by adding <code>--task task#3</code> to <code>kito lane open</code>; agents take one up when you tell them
+    to.
+  </p>
+{/if}
+
 <style>
-  .row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
+  .detail {
+    margin-bottom: 20px;
   }
-  .grow {
-    flex: 1;
-  }
+  /* Where the tasks stand, a column each: four side by side, then two, then one. */
   .board {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 12px;
-    margin: 0 0 16px;
+    gap: var(--gap);
+    margin-bottom: var(--gap);
   }
-  @media (max-width: 860px) {
-    .board {
-      grid-template-columns: 1fr 1fr;
-    }
-  }
-  @media (max-width: 520px) {
-    .board {
-      grid-template-columns: 1fr;
-    }
-    .column {
-      min-height: 64px;
-    }
-  }
+  /* A well the cards lie in: a card dropped anywhere on it is in that column. */
   .column {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    align-content: start;
     min-height: 120px;
-    padding: 4px;
+    padding: 8px;
     border: 1px solid var(--line);
     border-radius: var(--radius-panel);
     background: color-mix(in srgb, var(--hover) 60%, transparent);
   }
-  .column h2 {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    font-size: 13px;
-    margin: 6px 8px 8px;
+  /* Its title, and its "None", start a little inside the edge of its cards. */
+  .column-head,
+  .inset {
+    padding-inline: 4px;
   }
-  .column h2 .faint {
-    font-weight: 500;
-    font-variant-numeric: tabular-nums;
+  .column-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-top: 4px;
   }
   .card {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 4px;
-    width: 100%;
-    padding: 10px 12px;
-    margin-bottom: 6px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-panel);
-    color: inherit;
-    font-size: 13px;
-    cursor: pointer;
-    transition: border-color 0.12s;
   }
-  .card:hover {
-    border-color: var(--line-strong);
-  }
-  .card.current {
+  /* The one shown above the board. */
+  .card[aria-current='true'] {
     border-color: var(--accent);
     box-shadow: var(--ring);
   }
-  .card .title {
-    font-weight: 500;
-  }
-  .meta {
+  .facts {
     display: flex;
-    gap: 4px;
     flex-wrap: wrap;
     align-items: center;
-    font-size: 12px;
+    gap: 2px 8px;
   }
-  .chip.mine {
-    border-color: var(--accent);
-    color: var(--accent);
+  @media (max-width: 900px) {
+    .board {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
   }
-  .detail,
-  .add {
-    padding: 16px;
-    margin: 16px 0;
-    display: grid;
-    gap: 10px;
-  }
-  .detail h2,
-  .detail h3 {
-    margin: 0;
-  }
-  .detail h3 {
-    margin-top: 8px;
-  }
-  .detail p {
-    margin: 0;
-    font-size: 13px;
-  }
-  .label {
-    min-width: 48px;
-    font-size: 13px;
-    font-weight: 500;
-  }
-  .said {
-    border-left: 2px solid var(--line);
-    padding-left: 10px;
-    font-size: 13px;
-  }
-  .wide {
-    flex: 1;
-  }
-  .rendered {
-    font-size: 13px;
-    line-height: 1.55;
+  @media (max-width: 640px) {
+    .board {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .column {
+      min-height: 64px;
+    }
   }
 </style>

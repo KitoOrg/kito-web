@@ -1,3 +1,7 @@
+/* The one look of the client. A component's own <style> holds only the
+   layout that is unique to it: sizes of text, colours, radii, paddings and
+   the height of what is pressed all come from here (frontend/scripts/lint-ui.mjs
+   checks it). */
 :root {
   --bg: #f7f7f9;
   --panel: #ffffff;
@@ -23,9 +27,14 @@
   --bad-bg: #fbe6e3;
   --done: #4d5878;
   --done-bg: #e8ebf3;
+  /* The top bar: dark in both themes, with what is drawn on it. */
   --chrome: #1c1b33;
   --chrome-ink: #f0effa;
   --on-chrome: #aaa5f7;
+  --chrome-fill: rgba(255, 255, 255, 0.08);
+  --chrome-fill-strong: rgba(255, 255, 255, 0.14);
+  --chrome-line: rgba(255, 255, 255, 0.16);
+  --chrome-soft: rgba(240, 239, 250, 0.6);
   --mono: 'Geist Mono Variable', ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace;
   --sans: 'Geist Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
 
@@ -35,8 +44,14 @@
   --radius: 6px;
   --radius-panel: 8px;
   --pad-x: 12px;
+  --pad-panel: 16px;
+  --gap: 12px;
+  --narrow: 720px;
+  --side: 300px;
   --ring: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent);
   --menu-shadow: 0 8px 24px rgba(16, 16, 32, 0.14), 0 1px 3px rgba(16, 16, 32, 0.08);
+  --raise-shadow: 0 -6px 20px rgba(16, 16, 32, 0.1);
+  --seg-shadow: 0 1px 2px rgba(16, 16, 32, 0.12);
   color-scheme: light dark;
 }
 
@@ -69,6 +84,8 @@
     --chrome: #0e0d1a;
     --chrome-ink: #eaeaf2;
     --menu-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);
+    --raise-shadow: 0 -6px 20px rgba(0, 0, 0, 0.4);
+    --seg-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   }
 }
 
@@ -76,11 +93,13 @@
   box-sizing: border-box;
 }
 
+/* ---- Text: 12 for what is beside the point, 13 for everything, 14 for
+   what is read at length. */
 body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font: 14px/1.5 var(--sans);
+  font: 13px/1.5 var(--sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -93,11 +112,20 @@ a {
 a:hover {
   text-decoration: underline;
 }
+b,
+strong {
+  font-weight: 600;
+}
+p {
+  margin: 0;
+}
 
-/* Headings: a page title, and one kind of section title. */
+/* Headings, by what they head: the page, a section of it, a card, a group
+   inside a card. */
 h1,
 h2,
-h3 {
+h3,
+h4 {
   margin: 0;
   font-weight: 600;
   line-height: 1.3;
@@ -106,18 +134,155 @@ h3 {
 h1 {
   font-size: 20px;
 }
-h2,
+h2 {
+  font-size: 15px;
+}
 h3 {
-  font-size: 14px;
+  font-size: 13px;
+  letter-spacing: 0;
+}
+h4 {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--soft);
 }
 
 code,
 .mono {
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: 12px;
+}
+/* A title that is a path or a function keeps the size of a title. */
+h1.mono {
+  font-size: 20px;
+}
+h1 .mono {
+  font-size: inherit;
+}
+.small {
+  font-size: 12px;
+}
+.soft {
+  color: var(--soft);
+}
+.faint {
+  color: var(--faint);
+}
+/* Where a value would be, and there is none. */
+.none {
+  color: var(--faint);
+}
+.grow {
+  flex: 1;
 }
 
-/* ---- Page header: a title, one line on what the page is, its actions. */
+/* What is read at length: a comment, a note, a rendered text. */
+.said {
+  font-size: 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.rendered {
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.rendered > :first-child {
+  margin-top: 0;
+}
+.rendered > :last-child {
+  margin-bottom: 0;
+}
+.rendered p,
+.rendered ul,
+.rendered ol,
+.rendered pre,
+.rendered blockquote {
+  margin: 0 0 10px;
+}
+.rendered h1,
+.rendered h2,
+.rendered h3,
+.rendered h4 {
+  margin: 16px 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.rendered h1 {
+  font-size: 15px;
+}
+.rendered ul,
+.rendered ol {
+  padding-left: 22px;
+}
+.rendered blockquote {
+  padding-left: 12px;
+  border-left: 3px solid var(--line);
+  color: var(--soft);
+}
+pre,
+.code {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  background: var(--bg);
+  font: 12px/1.55 var(--mono);
+  overflow-x: auto;
+}
+.panel pre,
+.panel .code {
+  background: var(--hover);
+}
+pre code {
+  font-size: inherit;
+}
+/* Lines added and taken away, as counts. */
+.plus,
+.minus {
+  font: 12px var(--mono);
+}
+.plus {
+  color: var(--added-ink);
+}
+.minus {
+  color: var(--removed-ink);
+}
+/* What somebody gave as their reason: in quotes, as they said it. */
+q.reason {
+  color: var(--soft);
+}
+
+/* What belongs together, in the same colour: the lines of code written for
+   one reason. Six hues, in turn (`hue-${n % 6}`); a thing takes its edge
+   from `var(--hue)` and its wash from a mix of it. */
+.hue-0 {
+  --hue: #5b6ee1;
+}
+.hue-1 {
+  --hue: #c2569a;
+}
+.hue-2 {
+  --hue: #2f9a7a;
+}
+.hue-3 {
+  --hue: #c58a1f;
+}
+.hue-4 {
+  --hue: #8a5fd0;
+}
+.hue-5 {
+  --hue: #3d8fc7;
+}
+
+/* ---- The page: one container for the bar, the tabs and what is under them. */
+.wrap {
+  width: 100%;
+  max-width: 1200px;
+  margin-inline: auto;
+  padding-inline: 24px;
+}
 .page-head {
   display: flex;
   align-items: flex-start;
@@ -130,14 +295,28 @@ code,
   min-width: 0;
 }
 .page-head h1 {
+  display: inline;
   overflow-wrap: anywhere;
 }
-.page-head .lead,
+.page-head .after {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: 8px;
+  vertical-align: 3px;
+}
+.page-head .back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--soft);
+}
 .lead {
   margin: 4px 0 0;
   color: var(--soft);
-  font-size: 13px;
   max-width: 760px;
+  overflow-wrap: anywhere;
 }
 .page-head .actions {
   display: flex;
@@ -146,14 +325,67 @@ code,
   align-items: center;
 }
 
-/* A section of a page: its title, and what follows. */
+/* A section of a page: its title, a line on it, and what follows. */
 .section-title {
   margin: 28px 0 10px;
-  font-size: 14px;
-  font-weight: 600;
 }
 .section-title:first-child {
   margin-top: 0;
+}
+.section-title:has(+ .section-lead) {
+  margin-bottom: 2px;
+}
+.section-lead {
+  margin: 0 0 10px;
+  color: var(--soft);
+  max-width: 760px;
+  overflow-wrap: anywhere;
+}
+/* A section whose title has something to press beside it. */
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 28px 0 10px;
+}
+.section-head:first-child {
+  margin-top: 0;
+}
+.section-head > .section-title {
+  margin: 0;
+  flex: 1;
+}
+/* A line under a list or a table: what else there is to know. */
+.footnote {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--faint);
+  max-width: 760px;
+}
+
+/* Forms and settings are not read across the whole page. */
+.narrow {
+  max-width: var(--narrow);
+}
+/* One under the other, the same distance apart. */
+.stack {
+  display: grid;
+  /* One column that never grows past what holds it: code scrolls inside. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--gap);
+  align-content: start;
+  min-width: 0;
+}
+/* What a page is about, and what stands beside it. */
+.cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--side);
+  gap: 20px;
+  align-items: start;
+}
+.cols.left {
+  grid-template-columns: 240px minmax(0, 1fr);
 }
 
 /* ---- Controls: one height, one radius, one size of text. */
@@ -183,42 +415,57 @@ code,
   opacity: 0.5;
   cursor: default;
 }
-button.sm {
+button.sm,
+a.button.sm {
   min-height: var(--control-sm);
   padding: 0 10px;
-  font-size: 12.5px;
+  font-size: 12px;
 }
-button.primary {
+button.primary,
+a.button.primary {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-ink);
 }
-button.primary:hover:not(:disabled) {
+button.primary:hover:not(:disabled),
+a.button.primary:hover {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
 }
-button.quiet {
+button.quiet,
+a.button.quiet {
   border-color: transparent;
   background: transparent;
   color: var(--soft);
   padding: 0 8px;
 }
-button.quiet:hover:not(:disabled) {
+button.quiet:hover:not(:disabled),
+a.button.quiet:hover {
   background: var(--hover);
   color: var(--ink);
 }
-button.danger {
-  color: var(--bad);
-}
-button.danger:hover:not(:disabled) {
-  background: var(--bad-bg);
-  border-color: color-mix(in srgb, var(--bad) 40%, transparent);
-}
+button.danger,
+a.button.danger,
 button.quiet.danger {
   color: var(--bad);
 }
-/* A button that is a row, a card, a line of code: none of the above. */
-button.bare {
+button.danger:hover:not(:disabled),
+a.button.danger:hover {
+  background: var(--bad-bg);
+  border-color: color-mix(in srgb, var(--bad) 40%, transparent);
+  color: var(--bad);
+}
+/* Only a picture on it: as wide as it is tall. */
+button.icon {
+  padding: 0;
+  min-width: var(--control);
+}
+button.icon.sm {
+  min-width: var(--control-sm);
+}
+/* A button that is a row, a card, a line of code: none of the above, and
+   whatever class it is given wins over this. */
+:where(button.bare) {
   display: revert;
   min-height: 0;
   padding: 0;
@@ -234,40 +481,20 @@ button.bare {
 a.button {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  gap: 6px;
   min-height: var(--control);
   padding: 0 var(--pad-x);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   background: var(--panel);
   color: var(--ink);
-  font-size: 13px;
-  font-weight: 500;
+  font: 500 13px/1.2 var(--sans);
+  white-space: nowrap;
 }
 a.button:hover {
   text-decoration: none;
   background: var(--hover);
-}
-a.button.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
-}
-a.button.primary:hover {
-  background: var(--accent-hover);
-}
-a.button.quiet {
-  border-color: transparent;
-  background: none;
-  color: var(--soft);
-}
-a.button.quiet:hover {
-  color: var(--ink);
-  background: var(--hover);
-}
-.hint {
-  margin: 0;
-  font-size: 12px;
-  color: var(--faint);
 }
 
 :where(input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color'])),
@@ -280,6 +507,7 @@ a.button.quiet:hover {
   color: var(--ink);
   font: 13px/1.2 var(--sans);
   min-width: 0;
+  max-width: 100%;
 }
 :where(select) {
   padding-right: 8px;
@@ -296,6 +524,11 @@ a.button.quiet:hover {
   font: 13px/1.5 var(--sans);
   resize: vertical;
 }
+input.mono,
+textarea.mono {
+  font-family: var(--mono);
+  font-size: 12px;
+}
 :where(input, select, textarea)::placeholder {
   color: var(--faint);
 }
@@ -310,7 +543,7 @@ a.button.quiet:hover {
 input.sm,
 select.sm {
   height: var(--control-sm);
-  font-size: 12.5px;
+  font-size: 12px;
 }
 input[type='checkbox'],
 input[type='radio'] {
@@ -326,22 +559,29 @@ input[type='radio'] {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
   color: var(--ink);
   cursor: pointer;
 }
-/* A labelled field: its name above it. */
+/* A labelled field: its name above it, a word of help under it. */
 .field {
   display: grid;
   gap: 6px;
-  font-size: 13px;
   font-weight: 500;
   color: var(--ink);
+  min-width: 0;
 }
-.field .hint {
+.hint {
+  margin: 0;
+  font-size: 12px;
   font-weight: 400;
   color: var(--soft);
-  font-size: 12px;
+}
+/* Fields side by side, as many as fit. */
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--gap);
+  align-items: start;
 }
 /* Fields and buttons on one line. */
 .controls {
@@ -350,9 +590,33 @@ input[type='radio'] {
   align-items: center;
   flex-wrap: wrap;
 }
+/* Quiet buttons under a text: their words start where the text does. */
+.controls.flush {
+  margin-left: -8px;
+}
+/* What narrows a list: its fields in a row, each named for those who do
+   not see it. */
+.filters {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 12px var(--pad-panel);
+  margin-bottom: var(--gap);
+}
+.filters > input:not([type='checkbox']) {
+  flex: 1 1 160px;
+}
+/* A form opened from the head of a page: a new thing to add. */
+.form {
+  display: grid;
+  gap: var(--gap);
+  margin-bottom: 20px;
+}
 
 button:focus-visible,
-a:focus-visible {
+a:focus-visible,
+summary:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -365,6 +629,8 @@ a:focus-visible {
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   background: var(--bg);
+  max-width: 100%;
+  overflow-x: auto;
 }
 .seg button {
   min-height: calc(var(--control) - 6px);
@@ -381,11 +647,38 @@ a:focus-visible {
 .seg button[aria-pressed='true'] {
   background: var(--panel);
   color: var(--ink);
-  box-shadow: 0 1px 2px rgba(16, 16, 32, 0.12);
+  box-shadow: var(--seg-shadow);
 }
-.seg button b {
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
+
+/* The parts of one thing (a lane), under its head: not the tabs of the
+   repository, and not drawn like them. */
+.subtabs {
+  display: flex;
+  gap: 4px;
+  margin: 0 0 16px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.subtabs a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--control);
+  padding: 0 12px;
+  border-radius: var(--radius);
+  color: var(--soft);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.subtabs a:hover {
+  text-decoration: none;
+  color: var(--ink);
+  background: var(--hover);
+}
+.subtabs a[aria-current='page'] {
+  color: var(--ink);
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
 }
 
 /* ---- Surfaces. */
@@ -394,29 +687,198 @@ a:focus-visible {
   border: 1px solid var(--line);
   border-radius: var(--radius-panel);
 }
+.pad {
+  padding: var(--pad-panel);
+}
 .panel > .panel-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 16px;
+  flex-wrap: wrap;
+  min-height: 44px;
+  padding: 6px var(--pad-panel);
   border-bottom: 1px solid var(--line);
 }
-
-.soft {
+/* Folded, or with nothing under it: nothing to rule off. */
+.panel > .panel-head:last-child {
+  border-bottom: 0;
+}
+/* A long name breaks where it must: what is pressed beside it keeps its room. */
+.panel-head > h3 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* A panel of rows in groups, each under its label: files by directory,
+   parts by kind. Its rows reach its edges and stay inside its corners. */
+.groups {
+  overflow: hidden;
+}
+.groups > h4 {
+  margin: 12px 12px 4px;
+  overflow-wrap: anywhere;
+}
+.panel > .panel-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px var(--pad-panel);
+  border-top: 1px solid var(--line);
+}
+/* A panel that is a link: the whole of it is pressed. */
+a.panel {
+  color: inherit;
+  transition: border-color 0.12s;
+}
+:where(a.panel) {
+  display: block;
+}
+a.panel:hover {
+  text-decoration: none;
+  border-color: var(--line-strong);
+}
+/* Cards side by side, as many as fit. */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--gap);
+}
+/* A part of the page that opens when its summary is pressed. */
+details > summary {
+  cursor: pointer;
+  font-weight: 500;
   color: var(--soft);
 }
-.faint {
-  color: var(--faint);
+details > summary:hover {
+  color: var(--ink);
+}
+details[open] > summary {
+  margin-bottom: 8px;
+}
+/* A card whose parts follow one another closely: a title, a line, a value. */
+.box {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  overflow-wrap: anywhere;
+  align-content: start;
+  min-width: 0;
+}
+/* One setting: its title and where it stands, what it means, its controls. */
+.setting {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  overflow-wrap: anywhere;
+  justify-items: start;
+  min-width: 0;
+}
+.setting > .head,
+.box > .head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.setting > .loading {
+  justify-self: stretch;
+}
+.setting > textarea,
+.setting > .controls,
+.setting > .fields,
+.setting > .stretch {
+  justify-self: stretch;
+}
+/* A name and its value, one pair a line. */
+.kv {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 16px;
+  margin: 0;
+  align-items: baseline;
+}
+.kv dt {
+  color: var(--soft);
+}
+.kv dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ---- Lists of things one opens: a row each. */
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+.rows > li + li {
+  border-top: 1px solid var(--line);
+}
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px var(--pad-panel);
+  color: inherit;
+}
+a.row:hover,
+button.row:hover {
+  text-decoration: none;
+  background: var(--hover);
+}
+/* Inside the list's own edge, which would cut it off. */
+.row:focus-visible {
+  outline-offset: -2px;
+}
+button.row {
+  width: 100%;
+}
+/* The one of a list that is shown beside it. */
+.row[aria-current='true'],
+.row[aria-current='page'] {
+  background: var(--accent-wash);
+}
+/* A long list beside what it lists: files, parts, people. */
+.rows.tight .row {
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+}
+.row-body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.row-title {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.row-meta {
+  font-size: 12px;
+  color: var(--soft);
+  overflow-wrap: anywhere;
+}
+.row-side {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
 }
 
 /* ---- Tables: one style. */
 .table-wrap {
+  /* What is placed out of the flow inside it (words for whoever does not
+     see the page) scrolls with it, and never widens the page. */
+  position: relative;
   overflow-x: auto;
 }
 :where(main) table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
 }
 :where(main) th {
   height: 36px;
@@ -434,14 +896,38 @@ a:focus-visible {
   border-bottom: 1px solid var(--line);
   vertical-align: middle;
 }
+:where(main) th:first-child,
+:where(main) td:first-child {
+  padding-left: var(--pad-panel);
+}
+:where(main) th:last-child,
+:where(main) td:last-child {
+  padding-right: var(--pad-panel);
+}
 :where(main) tbody tr:last-child td {
   border-bottom: 0;
 }
 :where(main) tbody tr:hover td {
   background: var(--hover);
 }
+/* A table inside a card that has its own edge and padding: flush with the card's words. */
+.pad .table-wrap:not(.panel) :is(th, td):first-child {
+  padding-left: 0;
+}
+.pad .table-wrap:not(.panel) :is(th, td):last-child {
+  padding-right: 0;
+}
+/* What can be done with a row: at its end. */
+td.actions,
+th.actions {
+  text-align: right;
+  white-space: nowrap;
+}
+td.actions > * + * {
+  margin-left: 4px;
+}
 
-/* ---- Chips: one size, a few tones. */
+/* ---- Chips: where a thing stands, in a word or three. Nothing else is a chip. */
 .chip {
   display: inline-flex;
   align-items: center;
@@ -458,13 +944,6 @@ a:focus-visible {
   white-space: nowrap;
   vertical-align: middle;
 }
-p.chip {
-  margin: 0;
-}
-a.chip:hover {
-  text-decoration: none;
-  border-color: var(--line-strong);
-}
 .chip.ok {
   background: var(--ok-bg);
   color: var(--ok);
@@ -480,8 +959,7 @@ a.chip:hover {
   color: var(--bad);
   border-color: transparent;
 }
-.chip.done,
-.chip.neutral {
+.chip.done {
   background: var(--done-bg);
   color: var(--done);
   border-color: transparent;
@@ -491,15 +969,62 @@ a.chip:hover {
   color: var(--accent);
   border-color: transparent;
 }
+/* The kind of a thing, or where it comes from: a word, not a state. */
+.tag {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--soft);
+  white-space: nowrap;
+}
+/* How many: beside a tab, a heading, a choice. */
+.count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--hover);
+  color: var(--soft);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.count.bad {
+  background: var(--bad-bg);
+  color: var(--bad);
+}
+.count.accent {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+/* On the dark bar. */
+.count.chrome {
+  background: var(--on-chrome);
+  color: var(--chrome);
+}
+/* A lane, a task, a file, a function: named as it is typed. */
+.ref {
+  font-family: var(--mono);
+  font-size: 12px;
+}
 
-/* Where a lane stands, at the start of its row: open, waiting, stopped, done. */
+/* Where a thing stands, at the start of its row: the tone alone. Its words
+   stand in the row as plain text (`.tag`), never as a chip of the same tone. */
 .ring {
   width: 16px;
   height: 16px;
   margin-top: 2px;
-  border: 2px solid var(--ok);
+  border: 2px solid var(--line-strong);
   border-radius: 50%;
   flex: none;
+}
+.ring.ok {
+  border-color: var(--ok);
+}
+.ring.accent {
+  border-color: var(--accent);
 }
 .ring.warn {
   border-color: var(--warn);
@@ -522,57 +1047,96 @@ a.chip:hover {
   white-space: nowrap;
 }
 
-.error {
-  margin: 0 0 12px;
+/* ---- What the page says back. */
+.error,
+.notice,
+.result {
+  margin: 0;
   padding: 8px 12px;
-  border: 1px solid color-mix(in srgb, var(--bad) 25%, transparent);
+  border: 1px solid transparent;
   border-radius: var(--radius);
+  overflow-wrap: anywhere;
+}
+/* It did not work: said under what was pressed. */
+.error {
+  border-color: color-mix(in srgb, var(--bad) 25%, transparent);
   background: var(--bad-bg);
   color: var(--bad);
-  font-size: 13px;
-  overflow-wrap: anywhere;
 }
 /* Something to know, that stays: a warning on the page. */
 .notice {
-  margin: 0;
-  padding: 8px 12px;
-  border: 1px solid color-mix(in srgb, var(--warn) 25%, transparent);
-  border-radius: var(--radius);
+  border-color: color-mix(in srgb, var(--warn) 25%, transparent);
   background: var(--warn-bg);
   color: var(--warn);
-  font-size: 13px;
-  overflow-wrap: anywhere;
+}
+.notice.ok {
+  border-color: color-mix(in srgb, var(--ok) 25%, transparent);
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+/* What came of an action and has to stay on the page: a token to copy. */
+.result {
+  display: grid;
+  gap: 6px;
+  border-color: var(--line);
+  background: var(--panel);
+}
+:where(main) > .error,
+:where(main) > .notice,
+:where(main) > .result {
+  margin-bottom: var(--gap);
 }
 
 /* Phones: a wide table scrolls on its own, nothing pushes the page wider
    than the screen, and what is pressed is big enough for a thumb. */
-@media (max-width: 760px) {
-  main table {
-    display: block;
-    max-width: 100%;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  main pre {
-    max-width: 100%;
-    overflow-x: auto;
-  }
-  main input:not([type='checkbox']):not([type='radio']),
-  main select,
-  main textarea {
-    max-width: 100%;
-    min-width: 0;
+@media (max-width: 900px) {
+  .cols,
+  .cols.left {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (max-width: 640px) {
   :root {
     --control: 36px;
     --control-sm: 32px;
+    --pad-panel: 14px;
   }
+  .wrap {
+    padding-inline: 16px;
+  }
+  /* A table that nothing wraps scrolls by itself. */
+  main :not(.table-wrap) > table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Phones zoom into anything smaller: the small and the mono ones too. */
   :where(input:not([type='checkbox'], [type='radio'])),
   :where(select),
-  :where(textarea) {
-    /* Phones zoom into anything smaller. */
+  :where(textarea),
+  input.sm,
+  select.sm,
+  input.mono,
+  textarea.mono {
     font-size: 16px;
+  }
+  /* A row's side goes under its words, where they start. */
+  .row {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+  .row-body {
+    flex: 1 1 calc(100% - 40px);
+  }
+  .row-side {
+    flex-basis: 100%;
+    justify-content: flex-start;
+  }
+  .ring ~ .row-side {
+    padding-left: 28px;
+  }
+  .rows.tight .row {
+    flex-wrap: nowrap;
   }
 }

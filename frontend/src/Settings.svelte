@@ -1,18 +1,26 @@
 <script>
-  // Behind a server: the rules of a repository, for its maintainers and the
-  // server's admins. The checks run commands on the server's machine:
-  // only its admins change them. Who changed what is kept by the server.
-  import { ago, ask } from './api.js';
+  // Behind a server: how a repository is run, for its maintainers and the
+  // server's admins. The check commands run on the server's machine: only
+  // its admins change them. Who changed what is kept by the server.
+  import { ask } from './api.js';
   import { toast } from './toast.svelte.js';
-  import Loading from './Loading.svelte';
+  import Confirm from './Confirm.svelte';
+  import Empty from './Empty.svelte';
+  import Err from './Err.svelte';
   import GitHubSync from './GitHubSync.svelte';
+  import Loading from './Loading.svelte';
+  import PageHead from './PageHead.svelte';
+  import SettingCard from './SettingCard.svelte';
+  import Time from './Time.svelte';
 
   let { repo, who } = $props();
 
   let now = $state(null);
-  let history = $state([]);
+  let changes = $state([]);
   let failed = $state('');
-  let busy = $state(false);
+  // The setting being saved; and why a change did not work, by the setting it was for.
+  let busy = $state('');
+  let wrong = $state({});
 
   // What is being edited.
   let approvals = $state(0);
@@ -23,19 +31,30 @@
   const admin = $derived(Boolean(who?.admin));
   // The plugins that run on this server (Kito 0.36.2); a server that does
   // not say is taken to run them all.
-  const running = (name) => who?.plugins === undefined || who.plugins.includes(name);
-  const plugins = $derived(who?.plugins ?? []);
+  const runs = (name) => who?.plugins === undefined || who.plugins.includes(name);
   const kitchens = $derived((who?.repos ?? []).map((one) => one.name).filter((name) => name !== repo));
 
-  async function load() {
+  // A kitchen is named by where it is from here (`../shop-kitchen`): shown by its name.
+  const named = (path) => String(path ?? '').replace(/^\.\.\//, '');
+  // The kitchen the server has for this repository; '': the standard one.
+  const used = $derived(named(now?.kitchen));
+
+  // The fields show what the server has: all of them when the page opens,
+  // only the one that was saved after a change, so that what is being
+  // typed in the others stays.
+  function show(rules, only = null) {
+    if (only === null || only === 'approvals') approvals = rules.approvals ?? 0;
+    if (only === null || only === 'push') push = rules.push ?? '';
+    if (only === null || only === 'checks') checks = (rules.checks ?? []).join('\n');
+    if (only === null || only === 'kitchen') kitchen = named(rules.kitchen);
+  }
+
+  async function load(only = null) {
     try {
-      const [rules, changes] = await Promise.all([ask('configure', {}), ask('server.settings_history')]);
+      const [rules, kept] = await Promise.all([ask('configure', {}), ask('server.settings_history')]);
       now = rules;
-      history = changes;
-      approvals = rules.approvals ?? 0;
-      push = rules.push ?? '';
-      checks = (rules.checks ?? []).join('\n');
-      kitchen = rules.kitchen ? rules.kitchen.replace(/^\.\.\//, '') : '';
+      changes = kept;
+      show(rules, only);
       failed = '';
     } catch (error) {
       failed = error.message;
@@ -43,24 +62,28 @@
   }
   load();
 
-  async function change(what, work) {
-    busy = true;
-    failed = '';
+  async function change(setting, saying, work) {
+    busy = setting;
+    wrong = {};
+    let saved = true;
     try {
       await work();
-      toast(`${what[0].toUpperCase()}${what.slice(1)} saved`);
+      toast(saying);
     } catch (error) {
-      failed = error.message;
+      saved = false;
+      wrong = { [setting]: error.message };
     }
-    busy = false;
-    await load();
+    // What was typed and not saved stays to be corrected; a choice that was not taken goes back.
+    await load(saved || setting === 'kitchen' ? setting : 'nothing');
+    busy = '';
   }
 
-  const setProtected = (on) => change('protection', () => ask('protect', { on }));
-  const saveApprovals = () => change('approvals', () => ask('configure', { approvals: Number(approvals) || 0 }));
-  const savePush = () => change('git push', () => ask('configure', { push: push.trim() || null }));
+  const setProtected = (on) =>
+    change('protected', on ? 'Main lane protected' : 'Main lane no longer protected', () => ask('protect', { on }));
+  const saveApprovals = () => change('approvals', 'Approvals saved', () => ask('configure', { approvals: Number(approvals) || 0 }));
+  const savePush = () => change('push', 'Git push saved', () => ask('configure', { push: push.trim() || null }));
   const saveChecks = () =>
-    change('checks', () =>
+    change('checks', 'Check commands saved', () =>
       ask('configure', {
         checks: checks
           .split('\n')
@@ -68,200 +91,185 @@
           .filter(Boolean),
       }),
     );
-  const saveKitchen = () => change('kitchen', () => ask('configure', { kitchen: kitchen ? `../${kitchen}` : null }));
+  const saveKitchen = (name) =>
+    change('kitchen', name ? `${repo} uses the kitchen ${name}` : `${repo} uses the standard kitchen`, () =>
+      ask('configure', { kitchen: name ? `../${name}` : null }),
+    );
 
   // The last changes of one setting, as the server kept them.
-  const changesOf = (setting) => history.filter((one) => one.setting === setting).slice(0, 3);
-  function shown(value) {
-    if (value === null || value === undefined) return 'none';
-    if (Array.isArray(value)) return value.length === 0 ? 'none' : value.join(' · ');
-    if (value === true) return 'on';
-    if (value === false) return 'off';
-    return String(value).replace(/^\.\.\//, '');
+  const changesOf = (setting) => changes.filter((one) => one.setting === setting).slice(0, 3);
+
+  // What a change set a setting to, in the words of the page. `typed`: what
+  // one could type, a command or a remote.
+  function setTo({ setting, value }) {
+    if (setting === 'protected') return { text: value ? 'protected' : 'not protected' };
+    const none = value === null || value === undefined || value === '' || (Array.isArray(value) && value.length === 0);
+    if (setting === 'kitchen') return { text: none ? 'the standard kitchen' : named(value) };
+    if (none) return { text: 'none' };
+    if (Array.isArray(value)) return { text: value.join(' · '), typed: true };
+    return { text: String(value), typed: setting === 'push' };
   }
 </script>
 
-{#snippet changes(setting)}
-  {#each changesOf(setting) as one}
-    <p class="faint change">{one.by} set it to <span class="mono">{shown(one.value)}</span>, {ago(one.at_ms)}</p>
-  {/each}
+{#snippet changed(setting)}
+  {@const last = changesOf(setting)}
+  {#if last.length > 0}
+    <div class="small faint">
+      {#each last as one}
+        {@const to = setTo(one)}
+        <p>
+          {one.by} set {setting === 'checks' ? 'them' : 'it'} to <span class={[to.typed && 'mono']}>{to.text}</span>, <Time ms={one.at_ms} />
+        </p>
+      {/each}
+    </div>
+  {/if}
 {/snippet}
 
-<div class="page-head">
-  <div>
-    <h1>Settings of {repo}</h1>
-    <p class="lead">A change counts for the next integration; the server keeps who made it.</p>
-  </div>
-</div>
+<PageHead title="Settings" lead="How this repository is run. A change counts from the next integration, and the server keeps who made it." />
 
-{#if failed}<p class="error" role="alert">{failed}</p>{/if}
+<Err message={failed} />
 
 {#if now === null && !failed}
   <Loading lines={4} />
 {:else if now}
-  <h2 class="section-title group">Rules</h2>
-  <p class="soft group-about">What every lane meets before it goes in.</p>
-  <section class="panel setting">
-    <div class="head">
-      <h2>Protection</h2>
-      <span class="chip {now.protected ? 'ok' : 'warn'}">{now.protected ? 'protected' : 'open'}</span>
+  <div class="narrow">
+    <h2 class="section-title">Rules</h2>
+    <p class="section-lead">What a lane meets before it is integrated, and where each integration is pushed.</p>
+    <div class="stack">
+      <SettingCard
+        title="Main lane"
+        about="Protected, it changes only when a lane is integrated. Not protected, it can also be edited directly on the server."
+      >
+        {#snippet state()}
+          {#if now.protected}<span class="chip ok">protected</span>{:else}<span class="chip warn">not protected</span>{/if}
+        {/snippet}
+        {#if now.protected}
+          <Confirm
+            label="Unprotect"
+            ask="Unprotect the main lane? It can then be edited directly on the server, without a lane or a review."
+            working="Saving…"
+            quiet={false}
+            disabled={busy !== ''}
+            onyes={() => setProtected(false)}
+          />
+        {:else}
+          <button disabled={busy !== ''} onclick={() => setProtected(true)}>{busy === 'protected' ? 'Saving…' : 'Protect'}</button>
+        {/if}
+        <Err message={wrong.protected} />
+        {#snippet history()}{@render changed('protected')}{/snippet}
+      </SettingCard>
+
+      <SettingCard title="Approvals" about="How many people, other than the one a lane is for, approve it before it is integrated.">
+        <div class="controls">
+          <input class="digits" type="number" min="0" max="99" aria-label="Approvals" bind:value={approvals} />
+          <button class="primary" disabled={busy !== '' || (Number(approvals) || 0) === (now.approvals ?? 0)} onclick={saveApprovals}>
+            {busy === 'approvals' ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+        <Err message={wrong.approvals} />
+        {#snippet history()}{@render changed('approvals')}{/snippet}
+      </SettingCard>
+
+      <SettingCard title="Check commands" about="Commands that must succeed on the merged result, one per line, in the order they run.">
+        {#if admin}
+          <textarea rows="4" class="mono" aria-label="Check commands" placeholder="npm test" bind:value={checks}></textarea>
+          <div class="controls">
+            <button class="primary" disabled={busy !== '' || checks.trim() === (now.checks ?? []).join('\n')} onclick={saveChecks}>
+              {busy === 'checks' ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+          <Err message={wrong.checks} />
+        {:else}
+          {#if (now.checks ?? []).length === 0}
+            <p class="none">None</p>
+          {:else}
+            <ol class="commands mono">
+              {#each now.checks as check}<li>{check}</li>{/each}
+            </ol>
+          {/if}
+          <p class="hint">Only admins change them: they run on the server’s machine.</p>
+        {/if}
+        {#snippet history()}{@render changed('checks')}{/snippet}
+      </SettingCard>
+
+      <SettingCard
+        title="Git push"
+        about="The git remote every integration is pushed to: a name the repository’s git knows, or an address. Left empty, nothing is pushed."
+      >
+        <div class="controls">
+          <input class="remote mono" aria-label="Git remote" placeholder="origin" bind:value={push} />
+          <button class="primary" disabled={busy !== '' || push.trim() === (now.push ?? '')} onclick={savePush}>
+            {busy === 'push' ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+        <Err message={wrong.push} />
+        {#snippet history()}{@render changed('push')}{/snippet}
+      </SettingCard>
     </div>
-    <p class="soft">
-      {now.protected
-        ? 'The main lane changes only when a lane is integrated.'
-        : 'The main lane can be edited directly on the server.'}
+
+    <h2 class="section-title">Plugins</h2>
+    <p class="section-lead">
+      What the plugins of this server add to this repository.
+      {#if admin}They are enabled on the <a href={`${location.pathname}#/admin`}>Plugins</a> page.{/if}
     </p>
-    <button disabled={busy} onclick={() => setProtected(!now.protected)}>
-      {now.protected ? 'Open the main lane to direct edits' : 'Protect the main lane'}
-    </button>
-    {@render changes('protected')}
-  </section>
-
-  <section class="panel setting">
-    <h2>Approvals</h2>
-    <p class="soft">How many people other than its owner approve a lane before it goes in.</p>
-    <div class="row">
-      <input type="number" min="0" max="99" bind:value={approvals} />
-      <button disabled={busy || Number(approvals) === (now.approvals ?? 0)} onclick={saveApprovals}>Save</button>
+    <div class="stack">
+      {#if runs('kitchen')}
+        <SettingCard
+          title="Kitchen"
+          about="The kitchen this repository uses: another repository of this server, whose instructions every assistant here gets first. This repository’s own instructions win."
+        >
+          <select
+            aria-label="Kitchen"
+            value={kitchen}
+            disabled={busy !== ''}
+            onchange={(event) => {
+              kitchen = event.currentTarget.value;
+              saveKitchen(kitchen);
+            }}
+          >
+            <option value="">The standard kitchen</option>
+            {#each kitchens as name}<option value={name}>{name}</option>{/each}
+            {#if used && !kitchens.includes(used)}<option value={used}>{used}</option>{/if}
+          </select>
+          <Err message={wrong.kitchen} />
+          <p class="hint">
+            {#if used}
+              See <a href={`${location.pathname}#/kitchens?k=${encodeURIComponent(used)}`}>{used}</a> for its behaviour, concepts, recipes
+              and instructions, and who else uses it.
+            {:else}
+              The standard kitchen is Kito’s rules alone. The <a href={`${location.pathname}#/kitchens`}>Kitchens</a> page lists
+              those of this server.
+            {/if}
+          </p>
+          {#snippet history()}{@render changed('kitchen')}{/snippet}
+        </SettingCard>
+      {:else if used}
+        <p class="notice">
+          This repository uses the kitchen {used}, but the kitchen plugin does not run on this server: its instructions are not
+          given.
+        </p>
+      {/if}
+      {#if runs('github')}
+        <GitHubSync {repo} {admin} />
+      {/if}
+      {#if !runs('kitchen') && !runs('github')}
+        <Empty title="No plugin has settings here">None of the plugins that run on this server adds a setting to a repository.</Empty>
+      {/if}
     </div>
-    {@render changes('approvals')}
-  </section>
-
-  <section class="panel setting">
-    <div class="head">
-      <h2>Checks</h2>
-      {#if !admin}<span class="chip" title="They run commands on the server's machine">admins change them</span>{/if}
-    </div>
-    <p class="soft">Commands that must succeed on the merged result, one per line, in the order they run.</p>
-    {#if admin}
-      <textarea rows="4" class="mono" bind:value={checks} placeholder="npm test"></textarea>
-      <div class="row"><button disabled={busy || checks.trim() === (now.checks ?? []).join('\n')} onclick={saveChecks}>Save</button></div>
-    {:else if (now.checks ?? []).length === 0}
-      <p class="faint">None: a lane goes in as soon as it merges.</p>
-    {:else}
-      <ol class="mono">{#each now.checks as check}<li>{check}</li>{/each}</ol>
-    {/if}
-    {@render changes('checks')}
-  </section>
-
-  <section class="panel setting">
-    <h2>Git push</h2>
-    <p class="soft">The git remote every integration is pushed to: a name the repository's git knows, or a URL.</p>
-    <div class="row">
-      <input class="mono wide" placeholder="none" bind:value={push} />
-      <button disabled={busy || push.trim() === (now.push ?? '')} onclick={savePush}>Save</button>
-    </div>
-    {@render changes('push')}
-  </section>
-
-  <h2 class="section-title group">Plugins</h2>
-  <p class="soft group-about">
-    {#if plugins.length > 0}
-      Running on this server: {#each plugins as name, i}<span class="mono">{name}</span>{i < plugins.length - 1 ? ', ' : ''}{/each}.
-      What each sets for this repository is here; what they set for the whole server is on the Plugins page{admin
-        ? ''
-        : ', for admins'}.
-    {:else if who?.plugins !== undefined}
-      No plugin runs on this server.{#if admin} The Plugins page adds them.{/if}
-    {/if}
-  </p>
-
-  {#if running('kitchen')}
-  <section class="panel setting">
-    <div class="head"><h2>Kitchen</h2><span class="chip">kitchen</span></div>
-    <p class="soft">
-      Another repository of this server whose instructions every assistant here gets first; this repository's own
-      instructions win.
-    </p>
-    <div class="row">
-      <select bind:value={kitchen}>
-        <option value="">the standard kitchen (Kito's rules alone)</option>
-        {#each kitchens as name}<option value={name}>{name}</option>{/each}
-        {#if kitchen && !kitchens.includes(kitchen)}<option value={kitchen}>{kitchen}</option>{/if}
-      </select>
-      <button disabled={busy || kitchen === (now.kitchen ?? '').replace(/^\.\.\//, '')} onclick={saveKitchen}>Save</button>
-    </div>
-    {#if now.kitchen}
-      <p class="faint">
-        <a href={`${location.pathname}#/kitchens?k=${encodeURIComponent(shown(now.kitchen))}`}>Open the kitchen {shown(now.kitchen)}</a>:
-        its behaviour, concepts, recipes and instructions, and who else uses it.
-      </p>
-    {:else}
-      <p class="faint"><a href={`${location.pathname}#/kitchens`}>The kitchens of this server</a></p>
-    {/if}
-    {@render changes('kitchen')}
-  </section>
-  {/if}
-  {#if who?.plugins?.includes('github')}
-    <GitHubSync {repo} {admin} />
-  {/if}
-  {#if !running('kitchen') && now.kitchen}
-    <p class="faint">
-      This repository names the kitchen <span class="mono">{shown(now.kitchen)}</span>, and the kitchen plugin does not
-      run on this server: its instructions are not given.
-    </p>
-  {:else if plugins.length > 0 && !plugins.includes('github') && !running('kitchen')}
-    <p class="faint">None of them has settings for a repository.</p>
-  {/if}
+  </div>
 {/if}
 
 <style>
-  .group {
-    margin-bottom: 0;
-  }
-  .group-about {
-    margin: 4px 0 12px;
-    max-width: 720px;
-    font-size: 13px;
-  }
-  .setting {
-    display: grid;
-    gap: 8px;
-    justify-items: start;
-    padding: 16px;
-    margin: 0 0 12px;
-    max-width: 720px;
-  }
-  .setting > * {
-    margin: 0;
-  }
-  .setting > textarea,
-  .setting > .row {
-    justify-self: stretch;
-  }
-  .setting p {
-    font-size: 13px;
-  }
-  .head {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .row {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    flex-wrap: wrap;
-  }
-  .change {
-    font-size: 12px;
-  }
-  .setting .change {
-    font-size: 12px;
-  }
-  input[type='number'] {
+  .digits {
     width: 88px;
   }
-  .wide {
-    flex: 1;
-    min-width: 200px;
+  .remote {
+    flex: 1 1 200px;
   }
-  select {
-    max-width: 100%;
-  }
-  ol {
+  /* The commands, numbered in the order they run; a long one breaks where it must. */
+  .commands {
     margin: 0;
     padding-left: 20px;
-    font-size: 13px;
+    overflow-wrap: anywhere;
   }
 </style>

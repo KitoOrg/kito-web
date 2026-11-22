@@ -2,6 +2,7 @@
 // repository of the server with a `kitchen.toml` at its root, and its
 // parts by where their files are.
 import { askIn } from './api.js';
+import { count } from './format.js';
 
 /** The text of a file of a repository's main lane, with the ID of its content; null: no such file. */
 export async function readIn(repo, path) {
@@ -59,7 +60,7 @@ export function aboutOf(text) {
 
 /**
  * Changes files of a repository the way code is changed: a lane opened
- * for them, each file put in it, then the lane asked to go in. `files`:
+ * for them, each file put in it, then the lane asked to be integrated. `files`:
  * [path, text, base] (base: the ID of the content it was read as; null
  * for a new file). Answers the lane, and how the integration ended,
  * which is null when whoever asks may not integrate: then it waits in
@@ -84,6 +85,6 @@ export async function changeIn(repo, { agent, intent, files, integrate = true, w
       }
       return { lane: id, result: job.result };
     }
-    waiting(job.state === 'queued' ? `waiting behind ${job.ahead} other ${job.ahead === 1 ? 'lane' : 'lanes'}` : 'merging and checking');
+    waiting(job.state === 'queued' ? `Waiting behind ${count(job.ahead, 'other lane')}…` : 'Merging and checking…');
   }
 }

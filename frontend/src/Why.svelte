@@ -1,11 +1,19 @@
 <script>
-  // Why a function, a file or some lines are the way they are: the
-  // reasons, which lines each wrote, who uses it, who is on it now, and
-  // the notes left on it.
-  import { ask, ago, fileText, focus, laneLink, whyLink } from './api.js';
+  // Why a function or some lines are the way they are: the reasons, which
+  // lines each wrote, who uses it, who is on it now, and the notes left
+  // on it.
+  import { ask, fileText, focus, laneLink, mayWrite, whyLink } from './api.js';
+  import { laneName, sentence, who } from './format.js';
+  import { toast } from './toast.svelte.js';
+  import Confirm from './Confirm.svelte';
+  import Err from './Err.svelte';
   import Loading from './Loading.svelte';
+  import PageHead from './PageHead.svelte';
+  import Time from './Time.svelte';
 
-  let { target, lane = null } = $props();
+  // `role`: what the reader may do in this repository, behind a server.
+  let { target, lane = null, role = undefined } = $props();
+  const may = $derived(mayWrite(role));
 
   let graph = $state(null);
   let text = $state(null);
@@ -33,116 +41,122 @@
   load();
 
   let code = $derived(text === null ? [] : text.split('\n'));
-  // Each line that has a reason, with it.
+  // Each of its lines, with the reason it was last written for: none
+  // (null) for a line older than what the history tells.
   let rows = $derived(
     (graph?.lines ?? []).flatMap((run) =>
-      Array.from({ length: run.to - run.from + 1 }, (_, i) => ({ line: run.from + i, reason: run.reason })),
+      Array.from({ length: run.to - run.from + 1 }, (_, i) => ({ line: run.from + i, reason: run.reason ?? null })),
     ),
   );
-  const tint = (reason) => `hsl(${(reason * 67 + 205) % 360} 60% 50% / 0.16)`;
-  const edge = (reason) => `hsl(${(reason * 67 + 205) % 360} 55% 50%)`;
 
   let name = $derived(
     graph === null ? target : graph.target.name ? `${graph.target.file}:${graph.target.name}` : (graph.target.file ?? target),
   );
+  // For the browser's tab: without the directories it is in.
+  let short = $derived(name.slice(name.lastIndexOf('/') + 1));
 
-  async function act(what) {
+  // What a reason went through before it was integrated, in a line.
+  const passed = (reason) =>
+    sentence(
+      [
+        reason.checks?.length > 0 && `checks passed: ${reason.checks.join('; ')}`,
+        reason.reviewed_by?.length > 0 && `reviewed by ${reason.reviewed_by.join(', ')}`,
+        reason.approved_by && `integrated by ${reason.approved_by}`,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    );
+
+  // Does it, says so, and reads the page again; false when it could not.
+  async function act(what, done) {
     busy = true;
     noteFailed = '';
     try {
       await what();
-      note = '';
-      noting = false;
+      toast(done);
       await load();
+      return true;
     } catch (error) {
       noteFailed = error.message;
+      return false;
     } finally {
       busy = false;
     }
   }
-  const leave = () => act(() => ask('add_note', lane ? { on: target, text: note, lane } : { on: target, text: note }));
-  const remove = (id) => act(() => ask('remove_note', { note: id }));
+  async function add(event) {
+    event.preventDefault();
+    const params = lane ? { on: target, text: note, lane } : { on: target, text: note };
+    if (!(await act(() => ask('add_note', params), 'Note added'))) return;
+    note = '';
+    noting = false;
+  }
+  const remove = (id) => act(() => ask('remove_note', { note: id }), 'Note removed');
 </script>
 
-<p class="back"><a href="#/why">← Why</a></p>
+{#snippet facts()}
+  {sentence(graph.target.kind ?? '')}{#if graph.target.lines}&nbsp;· lines {graph.target.lines[0]}–{graph.target.lines[1]}{/if}{#if lane}&nbsp;· as
+    <a class="ref" href={laneLink(lane)}>{laneName(lane)}</a> has it{/if}{#if graph.target.name}&nbsp;· in
+    <a class="ref" href={whyLink(graph.target.file, lane)}>{graph.target.file}</a>{/if}
+{/snippet}
 
-{#if failed && graph === null}
-  <p class="error">{failed}</p>
-{:else if graph === null}
-  <Loading lines={4} />
+<PageHead title={name} mono name={short} back={{ href: '#/why', label: 'Code and why' }} lead={graph ? facts : null} />
+
+{#if graph === null}
+  {#if failed}<Err message={failed} />{:else}<Loading lines={4} />{/if}
 {:else}
-  <div class="top">
-    <h1 class="mono">{name}</h1>
-    <p class="soft meta">
-      {graph.target.kind}
-      {#if graph.target.lines}· lines {graph.target.lines[0]}–{graph.target.lines[1]}{/if}
-      {#if lane}· as <a href={laneLink(lane)}>{lane.startsWith('lane/') || isNaN(lane) ? lane : `lane/${lane}`}</a> has it{/if}
-      {#if graph.target.name}· in <a class="mono" href={whyLink(graph.target.file, lane)}>{graph.target.file}</a>{/if}
-    </p>
-  </div>
-  {#if failed}<p class="error">{failed}</p>{/if}
+  <Err message={failed} />
 
-  <div class="columns">
-    <div class="main">
-      <section class="panel">
-        <h2>Why it is the way it is</h2>
+  <div class="cols why">
+    <div class="stack">
+      <section class="panel pad box">
+        <h3>Why it is the way it is</h3>
         {#if graph.reasons.length === 0}
-          <p class="soft none">No reason is recorded for it.</p>
+          <p class="none">None yet</p>
+        {:else}
+          {#if rows.length > 0 && text !== null}
+            <p class="hint">Press a number to see the lines written for that reason.</p>
+          {/if}
+          <ol class="reasons">
+            {#each graph.reasons as reason, index}
+              <li class={`hue-${index % 6}`}>
+                <button
+                  class="bare swatch"
+                  aria-label={`Point out the lines written for: ${reason.why}`}
+                  aria-pressed={picked === index}
+                  onclick={() => (picked = picked === index ? null : index)}><span class="mono">{index + 1}</span></button
+                >
+                <div class="row-body">
+                  <span class="row-title"><q class="reason">{reason.why}</q></span>
+                  <span class="row-meta">
+                    {who(reason.by, reason.for)}{#if reason.how?.length > 0}&nbsp;· {reason.how.join(', ')}{/if}{#if reason.lane}&nbsp;· <a class="ref" href={laneLink(reason.lane)}>{laneName(reason.lane)}</a>{/if}
+                    · {#if reason.checkpoint}<span class="ref">{reason.checkpoint}</span>{:else}not integrated yet{/if}
+                    · <Time ms={reason.at_ms} />
+                  </span>
+                  {#if passed(reason)}<span class="row-meta">{passed(reason)}</span>{/if}
+                  {#if reason.with?.length > 0}
+                    <span class="row-meta">
+                      With {#each reason.with as other, at}{at > 0 ? ', ' : ''}<a class="ref" href={whyLink(other, lane)}>{other}</a>{/each}
+                    </span>
+                  {/if}
+                </div>
+              </li>
+            {/each}
+          </ol>
         {/if}
-        <ol>
-          {#each graph.reasons as reason, index}
-            <li class:picked={picked === index}>
-              <button
-                class="bare swatch"
-                style={`background:${tint(index)};border-color:${edge(index)}`}
-                title="Point out the lines it wrote"
-                aria-label={`Point out the lines written for: ${reason.why}`}
-                aria-pressed={picked === index}
-                onclick={() => (picked = picked === index ? null : index)}>{index + 1}</button
-              >
-              <div>
-                <p class="why">{reason.why}</p>
-                <p class="soft small">
-                  {reason.how?.join(', ')} · by {reason.by}{#if reason.for}, for {reason.for}{/if}
-                  {#if reason.lane}· <a href={laneLink(reason.lane)}>{reason.lane}</a>{/if}
-                  {#if reason.checkpoint}· {reason.checkpoint}{:else}· not integrated yet{/if}
-                  · {ago(reason.at_ms)}
-                </p>
-                {#if reason.checks?.length > 0 || reason.reviewed_by?.length > 0 || reason.approved_by}
-                  <p class="soft small">
-                    {#if reason.checks?.length > 0}checks passed: {reason.checks.join('; ')}{/if}
-                    {#if reason.reviewed_by?.length > 0}· reviewed by {reason.reviewed_by.join(', ')}{/if}
-                    {#if reason.approved_by}· let in by {reason.approved_by}{/if}
-                  </p>
-                {/if}
-                {#if reason.with?.length > 0}
-                  <p class="with small">
-                    <span class="faint">with</span>
-                    {#each reason.with as other}
-                      <a class="mono" href={whyLink(other, lane)}>{other}</a>
-                    {/each}
-                  </p>
-                {/if}
-              </div>
-            </li>
-          {/each}
-        </ol>
       </section>
 
       {#if rows.length > 0 && text !== null}
-        <section class="panel lines">
-          <h2>Its lines, and the reason each was last written for</h2>
+        <section class="panel pad box">
+          <h3>Its lines, and the reason each was last written for</h3>
           <div class="code" role="table" aria-label="Lines and their reasons">
             {#each rows as row (row.line)}
               <div
-                class="row"
-                class:dim={picked !== null && picked !== row.reason}
-                style={`background:${tint(row.reason)}`}
+                class={['line', row.reason !== null && `hue-${row.reason % 6}`, picked !== null && picked !== row.reason && 'dim']}
                 role="row"
               >
-                <span class="reason" style={`color:${edge(row.reason)}`}>{row.reason + 1}</span>
-                <span class="number">{row.line}</span>
-                <span class="text">{code[row.line - 1] ?? ''}</span>
+                <span class="by" role="cell">{row.reason === null ? '' : row.reason + 1}</span>
+                <span class="number" role="cell">{row.line}</span>
+                <span role="cell">{code[row.line - 1] ?? ''}</span>
               </div>
             {/each}
           </div>
@@ -150,52 +164,57 @@
       {/if}
     </div>
 
-    <aside>
-      <section class="panel side">
-        <h2>Notes</h2>
+    <aside class="stack">
+      <section class="panel pad box">
+        <h3>Notes</h3>
         {#each graph.annotations ?? [] as said (said.id)}
           <article class="note">
-            <p>{said.text}</p>
-            <p class="soft small">
-              {said.by}{#if said.for}, of {said.for}{/if} · on <span class="mono">{said.on}</span> · {ago(said.at_ms)}
-              <button class="quiet sm" disabled={busy} onclick={() => remove(said.id)}>Remove</button>
-            </p>
+            <p class="said">{said.text}</p>
+            <div class="controls">
+              <span class="grow small soft">
+                {who(said.by, said.for)} · on <span class="ref">{said.on}</span> · <Time ms={said.at_ms} />
+              </span>
+              {#if may}
+                <Confirm
+                  label="Remove"
+                  ask="Remove this note? Whoever changes this code is no longer told it."
+                  working="Removing…"
+                  onyes={() => remove(said.id)}
+                  disabled={busy}
+                  sm
+                />
+              {/if}
+            </div>
           </article>
         {:else}
-          <p class="soft small">Nothing to know about it that no change says.</p>
+          <p class="none">None yet</p>
         {/each}
         {#if noting}
-          <form
-            onsubmit={(event) => {
-              event.preventDefault();
-              leave();
-            }}
-          >
-            <textarea
-              bind:value={note}
-              placeholder="What whoever changes this must know, and the code does not show"
-              aria-label="A note on this code"
-              use:focus
-            ></textarea>
-            <div class="actions">
-              <button class="primary sm" disabled={busy || note.trim().length < 3}>Leave the note</button>
-              <button class="sm" type="button" onclick={() => (noting = false)}>Cancel</button>
+          <form class="box" onsubmit={add}>
+            <label class="field">
+              <span>Note</span>
+              <textarea bind:value={note} placeholder="Called by the nightly billing job, outside this repository: do not rename." use:focus></textarea>
+              <span class="hint">What whoever changes this code must know, and the code does not show.</span>
+            </label>
+            <div class="controls">
+              <button class="primary" disabled={busy || note.trim() === ''}>{busy ? 'Adding…' : 'Add'}</button>
+              <button type="button" class="quiet" onclick={() => (noting = false)}>Cancel</button>
             </div>
           </form>
-        {:else}
-          <div class="actions"><button class="sm" onclick={() => (noting = true)}>Leave a note</button></div>
+        {:else if may}
+          <div><button class="sm" onclick={() => (noting = true)}>Add note</button></div>
         {/if}
-        {#if noteFailed}<p class="error">{noteFailed}</p>{/if}
+        <Err message={noteFailed} />
       </section>
 
       {#if graph.in_progress?.length > 0}
-        <section class="panel side">
-          <h2>On it now</h2>
+        <section class="panel pad box">
+          <h3>On it now</h3>
           {#each graph.in_progress as work}
-            <p class="small">
-              <a href={laneLink(work.lane)}>{work.lane}</a> · {work.agent}{#if work.for}, for {work.for}{/if}
-              <br /><span class="soft">{work.intent ?? ''}</span>
-              <br /><span class="faint">{work.how}</span>
+            <p>
+              <a class="ref" href={laneLink(work.lane)}>{laneName(work.lane)}</a> · {who(work.agent, work.for)}
+              {#if work.intent}<br /><q class="reason">{work.intent}</q>{/if}
+              {#if work.how}<br /><span class="small faint">{work.how}</span>{/if}
             </p>
           {/each}
         </section>
@@ -203,13 +222,13 @@
 
       {#each [['Used by', graph.used_by], ['Uses', graph.uses], ['It contains', graph.contains]] as [title, items]}
         {#if items?.length > 0}
-          <section class="panel side">
-            <h2>{title}</h2>
+          <section class="panel pad box">
+            <h3>{title}</h3>
             {#each items as item}
-              <p class="small">
-                <a class="mono" href={whyLink(item.symbol, lane)}>{item.symbol}</a>
-                {#if item.line}<span class="faint">line {item.line}</span>{/if}
-                {#if item.last}<br /><span class="soft">“{item.last.why}”</span>{/if}
+              <p>
+                <a class="ref" href={whyLink(item.symbol, lane)}>{item.symbol}</a>
+                {#if item.line}<span class="small faint">line {item.line}</span>{/if}
+                {#if item.last}<br /><q class="reason">{item.last.why}</q>{/if}
               </p>
             {/each}
           </section>
@@ -217,13 +236,13 @@
       {/each}
 
       {#if graph.decisions?.length > 0}
-        <section class="panel side">
-          <h2>Decided on it</h2>
+        <section class="panel pad box">
+          <h3>Decided on it</h3>
           {#each graph.decisions as decision}
-            <p class="small">
+            <p>
               <span class="mono">{decision.conflict}</span> · {decision.kind.replaceAll('_', ' ')}
               <br /><span class="soft"
-                >{decision.decided ? `decided: ${decision.decided}${decision.applied ? ', applied' : ''}` : 'to decide'}</span
+                >{decision.decided ? `Decided: ${decision.decided}${decision.applied ? ', applied' : ''}` : 'To decide'}</span
               >
             </p>
           {/each}
@@ -234,146 +253,67 @@
 {/if}
 
 <style>
-  .back {
-    margin: 0 0 12px;
-    font-size: 13px;
-  }
-  .top {
-    margin-bottom: 16px;
-  }
-  h1 {
-    font-size: 20px;
+  /* Both columns can be narrow: a long word breaks. */
+  .why {
     overflow-wrap: anywhere;
   }
-  .meta {
-    margin: 4px 0 0;
-    font-size: 13px;
-  }
-  .columns {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 320px;
-    gap: 20px;
-    align-items: start;
-  }
-  @media (max-width: 900px) {
-    .columns {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  }
-  .main,
-  aside {
-    display: grid;
-    gap: 14px;
-    min-width: 0;
-  }
-  section {
-    padding: 14px 16px;
-  }
-  .none {
-    margin: 8px 0 0;
-  }
-  ol {
+  .reasons {
     list-style: none;
-    margin: 10px 0 0;
+    margin: 0;
     padding: 0;
     display: grid;
     gap: 12px;
   }
-  li {
+  .reasons li {
     display: grid;
-    grid-template-columns: 30px 1fr;
-    gap: 10px;
+    grid-template-columns: var(--control-sm) minmax(0, 1fr);
+    gap: 12px;
     align-items: start;
   }
+  /* The number of a reason, in the colour its lines have: pressed, it points them out. */
   .swatch {
-    width: 28px;
-    height: 28px;
     display: grid;
     place-items: center;
-    padding: 0;
-    border: 1px solid;
-    border-radius: 6px;
-    color: var(--ink);
-    font-family: var(--mono);
-    font-size: 12px;
-    text-align: center;
-    cursor: pointer;
+    width: var(--control-sm);
+    height: var(--control-sm);
+    border: 1px solid var(--hue);
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--hue) 14%, transparent);
   }
-  li.picked .swatch {
+  .swatch[aria-pressed='true'] {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
-  .why {
-    margin: 0;
-    font-weight: 500;
-    overflow-wrap: anywhere;
-  }
-  .small {
-    margin: 2px 0 0;
-    font-size: 13px;
-  }
-  .with {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 2px 12px;
-  }
-  .lines {
-    padding: 14px 0 0;
-    overflow: hidden;
-  }
-  .lines h2 {
-    padding: 0 16px 10px;
-  }
-  .code {
-    font: 13px/1.55 var(--mono);
-    overflow-x: auto;
-    border-top: 1px solid var(--line);
-  }
-  .row {
+  /* A line: the number of its reason, its own number, its text, in the
+     colour of the reason. */
+  .line {
     display: grid;
-    grid-template-columns: 34px 44px 1fr;
-    white-space: pre;
+    grid-template-columns: 28px 44px 1fr;
+    gap: 0 8px;
     min-width: max-content;
+    border-left: 3px solid var(--hue, transparent);
+    background: color-mix(in srgb, var(--hue, transparent) 14%, transparent);
+    white-space: pre;
   }
-  .row.dim {
+  .line.dim {
     opacity: 0.35;
   }
-  .reason {
+  .by {
     text-align: center;
-    font-weight: 700;
+    font-weight: 500;
     user-select: none;
   }
   .number {
     text-align: right;
-    padding-right: 10px;
     color: var(--faint);
     user-select: none;
   }
-  .text {
-    padding-right: 16px;
-  }
-  .side {
+  .note {
     display: grid;
-    gap: 8px;
-  }
-  .note p {
-    margin: 0;
-    overflow-wrap: anywhere;
+    gap: 4px;
   }
   .note + .note {
     padding-top: 8px;
     border-top: 1px solid var(--line);
-  }
-  .side p {
-    margin: 0;
-    overflow-wrap: anywhere;
-  }
-  .actions {
-    display: flex;
-    gap: 6px;
-    margin-top: 6px;
-  }
-  textarea {
-    min-height: 70px;
   }
 </style>

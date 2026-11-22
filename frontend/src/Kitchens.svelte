@@ -2,15 +2,22 @@
   // Behind a server with the kitchen plugin (kito-kitchen, ADR 0007): the
   // kitchens of the server, which repositories use each, and one kitchen
   // read part by part. Who may write in a kitchen changes its files here,
-  // through a lane as any code; who maintains a repository attaches it to
-  // a kitchen. A new one is started on the server's machine: an empty
+  // through a lane as any code; who maintains a repository says which
+  // kitchen it uses. A new one is started on the server's machine: an empty
   // repository has no main lane a lane could start from.
-  import { ago, askIn } from './api.js';
-  import { aboutOf, changeIn, kindOf, manifest, partOf, readIn } from './kitchen.js';
-  import { markdown } from './md.js';
+  import { askIn, focus, laneLink } from './api.js';
+  import { count, humanize, laneName, opName } from './format.js';
+  import { changeIn, kindOf, manifest, partOf, readIn } from './kitchen.js';
+  import { outcome } from './standing.js';
   import { toast } from './toast.svelte.js';
+  import Editor from './Editor.svelte';
   import Empty from './Empty.svelte';
+  import Err from './Err.svelte';
+  import Icon from './Icon.svelte';
   import Loading from './Loading.svelte';
+  import PageHead from './PageHead.svelte';
+  import State from './State.svelte';
+  import Time from './Time.svelte';
 
   let { who, k = null } = $props();
 
@@ -22,6 +29,12 @@
   const mayIntegrateIn = (name) => admin || ['integrate', 'maintain'].includes(roleIn(name));
   // `../kitchen` in a repository's configuration: the repository `kitchen`.
   const named = (kitchen) => (kitchen?.startsWith('../') ? kitchen.slice(3) : null);
+
+  // Where things are: this page, the page of one kitchen, the lanes of a repository, one of them.
+  const toList = { href: `${home}#/kitchens`, label: 'Kitchens' };
+  const pageOf = (name) => `${home}#/kitchens?k=${encodeURIComponent(name)}`;
+  const lanesOf = (name) => `${home}?repo=${encodeURIComponent(name)}#/`;
+  const laneIn = (name, lane) => `${home}?repo=${encodeURIComponent(name)}${laneLink(String(lane))}`;
 
   // Every repository this person may read: whether it is a kitchen, and the kitchen it names.
   let seen = $state(null);
@@ -70,13 +83,19 @@
     });
   });
   const kitchen = $derived(k ? (kitchens?.find((one) => one.name === k) ?? null) : null);
+  // What this person may do in it: everything for an admin, else by their role in its repository.
+  const MAY = { read: 'read it', write: 'write in it', integrate: 'integrate its lanes', maintain: 'maintain it' };
+  const may = $derived(MAY[admin ? 'maintain' : roleIn(k)] ?? 'read it');
 
-  // ---- One kitchen: its files, one of them open.
+  // ---- One kitchen: its files, and the one that is read.
   let files = $state(null);
   let filesFailed = $state('');
-  let open = $state(null); // { path, text, blob, fresh }
-  let reading = $state(false);
+  // The file that is shown: { path, text, blob, fresh }; and the one asked for, until it is read.
+  let open = $state(null);
+  let wanted = $state(null);
+  let readFailed = $state('');
   let history = $state(null);
+  let historyFailed = $state('');
 
   async function loadFiles() {
     if (!k) return;
@@ -84,7 +103,7 @@
       const listed = await askIn(k, 'lane_files', {});
       files = (listed.files ?? []).map((one) => one.path).sort();
       filesFailed = '';
-      if (open === null) {
+      if (open === null && wanted === null) {
         const first = files.find((path) => path === 'behaviour.md') ?? files.find((path) => kindOf(path) !== 'other') ?? files[0];
         if (first) await show(first);
       }
@@ -118,619 +137,430 @@
   };
 
   async function show(path) {
-    editing = false;
-    reading = true;
+    wanted = path;
+    readFailed = '';
     history = null;
+    historyFailed = '';
+    why = '';
     try {
       const found = await readIn(k, path);
+      // Another one was asked for meanwhile.
+      if (wanted !== path) return;
       open = { path, text: found?.text ?? '', blob: found?.blob ?? null, fresh: false };
-      text = open.text;
       loadHistory(path);
     } catch (error) {
-      filesFailed = error.message;
+      if (wanted !== path) return;
+      open = null;
+      readFailed = error.message;
     }
-    reading = false;
+    wanted = null;
   }
 
   async function loadHistory(path) {
     try {
       const items = await askIn(k, 'log', { path, limit: 20 });
+      if (open?.path !== path) return;
       history = items.filter((item) => item.type !== 'checkpoint' && !item.symbol && (item.path === path || !item.path));
-    } catch {
+    } catch (error) {
+      if (open?.path !== path) return;
       history = [];
+      historyFailed = error.message;
     }
   }
+  // What a change did, when nobody said why: `PutFile` as `put file`.
+  const done = (item) => item.detail ?? opName(item.op);
 
   // ---- Writing a file of the kitchen: through a lane, as code is.
-  let editing = $state(false);
-  let showing = $state('edit');
-  let text = $state('');
+  // What the lane is for, as whoever writes says it.
   let why = $state('');
-  let saving = $state('');
-  let saved = $state(null);
+  // Where a save stands while it is made, and what came of one that was not integrated.
+  let progress = $state('');
+  let waits = $state(null);
 
-  function startEdit() {
-    editing = true;
-    showing = 'edit';
-    text = open.text;
-    why = '';
-    saved = null;
-  }
-
+  let adding = $state(false);
   let fresh = $state({ kind: 'concepts', name: '' });
   function startNew(event) {
     event.preventDefault();
     const name = fresh.name.trim().toLowerCase().replace(/\.md$/, '').replace(/[^a-z0-9._-]+/g, '-');
     if (!name) return;
-    const path = `${fresh.kind}/${name}.md`;
-    open = { path, text: '', blob: null, fresh: true };
-    text = fresh.kind === 'concepts' ? `# What "${name}" means here\n\n` : `# How to ${name.replaceAll('-', ' ')}\n\n1. \n`;
+    const text = fresh.kind === 'concepts' ? `# What "${name}" means here\n\n` : `# How to ${name.replaceAll('-', ' ')}\n\n1. \n`;
+    wanted = null;
+    readFailed = '';
+    open = { path: `${fresh.kind}/${name}.md`, text, blob: null, fresh: true };
     history = [];
-    editing = true;
-    showing = 'edit';
     why = '';
-    saved = null;
     fresh = { kind: fresh.kind, name: '' };
+    adding = false;
   }
 
-  async function save() {
-    saving = 'opening a lane';
-    filesFailed = '';
-    saved = null;
-    const path = open.path;
+  async function save(text) {
+    const { path, blob, fresh: isNew } = open;
+    progress = 'Opening a lane…';
+    waits = null;
     try {
-      const done = await changeIn(k, {
+      const made = await changeIn(k, {
         agent: who.user,
-        intent: why.trim() || `${open.fresh ? 'Write' : 'Change'} ${path} of the kitchen`,
-        files: [[path, text, open.blob]],
+        intent: why.trim() || `${isNew ? 'Write' : 'Change'} ${path} of the kitchen`,
+        files: [[path, text, blob]],
         integrate: mayIntegrateIn(k),
-        waiting: (now) => (saving = now),
+        waiting: (now) => (progress = now),
       });
-      saved = done;
-      if (done.result?.result === 'integrated') {
-        toast(`${path} is in the kitchen`);
-        editing = false;
-        open = null;
-        files = null;
+      if (made.result?.result === 'integrated') {
+        toast(`${path} saved`);
         await loadFiles();
         await show(path);
-      } else if (done.result === null) {
-        toast(`${path} waits in ${done.lane}`);
+      } else {
+        // It is in its lane, not in the kitchen: what is read here has not changed.
+        waits = { path, lane: made.lane, result: made.result };
+        if (isNew && open?.fresh && open.path === path) open = null;
       }
-    } catch (error) {
-      filesFailed = error.message;
+    } finally {
+      progress = '';
     }
-    saving = '';
   }
+  // What saving does, said under "Save"; while it is made, where it stands.
+  const saveHint = $derived(
+    progress ||
+      (mayIntegrateIn(k)
+        ? 'A lane is opened for it, then integrated: the kitchen is what its main lane has.'
+        : 'A lane is opened for it; somebody who may integrate integrates it.'),
+  );
 
-  // ---- Which repositories use this kitchen.
-  let attach = $state({});
-  let attaching = $state(false);
+  // ---- Which repositories use this kitchen: those that are checked.
+  let chosen = $state({});
+  let choosing = $state(false);
+  let choiceFailed = $state('');
   $effect(() => {
     if (!seen || !k) return;
-    attach = Object.fromEntries(seen.filter((one) => one.name !== k).map((one) => [one.name, one.uses === k]));
+    chosen = Object.fromEntries(seen.filter((one) => one.name !== k).map((one) => [one.name, one.uses === k]));
   });
-  const attachChanged = $derived((seen ?? []).filter((one) => one.name !== k && attach[one.name] !== undefined && attach[one.name] !== (one.uses === k)));
+  const others = $derived((seen ?? []).filter((one) => one.name !== k));
+  const changes = $derived(others.filter((one) => chosen[one.name] !== undefined && chosen[one.name] !== (one.uses === k)));
 
-  async function applyAttach() {
-    attaching = true;
-    filesFailed = '';
+  async function saveChoice() {
+    choosing = true;
+    choiceFailed = '';
     try {
-      for (const one of attachChanged) {
-        await askIn(one.name, 'configure', { kitchen: attach[one.name] ? `../${k}` : null });
+      for (const one of changes) {
+        await askIn(one.name, 'configure', { kitchen: chosen[one.name] ? `../${k}` : null });
       }
-      const [one] = attachChanged;
+      const [one] = changes;
       toast(
-        attachChanged.length > 1
-          ? `${attachChanged.length} repositories changed`
-          : attach[one.name]
-            ? `${one.name} uses ${kitchen?.title ?? k} now`
-            : `${one.name} has the standard kitchen now`,
+        changes.length > 1
+          ? `${count(changes.length, 'repository', 'repositories')} changed`
+          : chosen[one.name]
+            ? `${one.name} uses the kitchen ${kitchen?.title ?? k}`
+            : `${one.name} uses the standard kitchen`,
       );
-      await survey();
     } catch (error) {
-      filesFailed = error.message;
-      await survey();
+      choiceFailed = error.message;
     }
-    attaching = false;
+    await survey();
+    choosing = false;
   }
-
-  const isMarkdown = (path) => path.endsWith('.md');
 </script>
 
 {#if !k}
-  <div class="page-head">
-    <div>
-      <h1>Kitchens</h1>
-      <p class="lead">
-        What a team shares to work on its repositories: how its agents behave, what its words mean, how things are done
-        here. A kitchen is a repository of this server with a <code>kitchen.toml</code>; the repositories attached to it
-        give its instructions to every assistant.
-      </p>
-    </div>
-  </div>
+  <PageHead title="Kitchens">
+    {#snippet lead()}
+      What a team shares to work on its repositories: how its agents behave, what its words mean, how things are done
+      here. A kitchen is a repository of this server with a <code>kitchen.toml</code>; the repositories that use it give
+      its instructions to every assistant.
+    {/snippet}
+  </PageHead>
 
-  {#if failed}<p class="error" role="alert">{failed}</p>{/if}
+  <Err message={failed} />
 
-  {#if admin}
-    <details class="panel start">
-      <summary>How a kitchen is started</summary>
-      <p class="soft">
-        A kitchen starts as files on a machine, then becomes a repository of this server. On the server's machine:
-      </p>
-      <pre>kito-server kitchen new ./kitchen "Our team"
+  <div class="stack">
+    {#if admin}
+      <details class="panel pad start">
+        <summary>How a kitchen is started</summary>
+        <div class="box">
+          <p class="soft">
+            A kitchen starts as files on a machine, then becomes a repository of this server. On the server’s machine:
+          </p>
+          <pre>kito-server kitchen new ./kitchen "Our team"
 kito-server repo add kitchen --from &lt;a git repository of it&gt;</pre>
-      <p class="soft">
-        Or from a connected directory holding those files: <code>kito repos add kitchen --push ./kitchen</code>. It shows
-        here as soon as its main lane has a <code>kitchen.toml</code>.
-      </p>
-    </details>
-  {/if}
-
-  {#if kitchens === null && !failed}
-    <Loading lines={3} />
-  {:else if kitchens?.length === 0}
-    <Empty title="No kitchen yet">
-      None of the repositories you may read has a <code>kitchen.toml</code>, and none is attached to a kitchen.
-      An admin of this server starts one.
-    </Empty>
-  {:else if kitchens}
-    <ul class="panel list">
-      {#each kitchens as one (one.name)}
-        <li>
-          <a class="row" href={`${home}#/kitchens?k=${encodeURIComponent(one.name)}`}>
-            <span class="body">
-              <span class="title">{one.title}</span>
-              <span class="meta">
-                <span class="mono">{one.name}</span>
-                {#if one.about}· {one.about}{/if}
-              </span>
-            </span>
-            <span class="side">
-              {#if !one.readable}
-                <span class="chip warn" title="You may not read this repository">not yours to read</span>
-              {:else if !one.marked}
-                <span class="chip" title="It has no kitchen.toml: only its instructions are given">instructions only</span>
-              {/if}
-              <span class="chip {one.users.length > 0 ? 'accent' : ''}">
-                {one.users.length === 0 ? 'used by none' : `used by ${one.users.length}`}
-              </span>
-            </span>
-          </a>
-        </li>
-      {/each}
-    </ul>
-    <p class="faint note">Only the repositories you may read are looked at.</p>
-  {/if}
-{:else}
-  <p class="back"><a href={`${home}#/kitchens`}>← Kitchens</a></p>
-  {#if seen === null}
-    <Loading lines={3} />
-  {:else if !kitchen || !kitchen.readable}
-    <Empty title={`No kitchen ${k} for you`}>It is not a repository of this server you may read.</Empty>
-  {:else}
-    <div class="page-head">
-      <div>
-        <h1>{kitchen.title}</h1>
-        <p class="lead">
-          <span class="mono">{k}</span>
-          {#if kitchen.about}· {kitchen.about}{/if}
-          · you may {roleIn(k) ?? (admin ? 'maintain' : 'read')} it
-        </p>
-      </div>
-      <div class="actions">
-        <a class="button" href={`${home}?repo=${encodeURIComponent(k)}#/`}>Its lanes</a>
-      </div>
-    </div>
-
-    {#if !kitchen.marked}
-      <p class="notice">
-        This repository has no <code>kitchen.toml</code>: the repositories attached to it are given its
-        <code>instructions/</code>, and the kitchen plugin finds no behaviour, concepts or recipes in it.
-      </p>
+          <p class="soft">
+            Or from a connected directory holding those files: <code>kito repos add kitchen --push ./kitchen</code>. It
+            shows here as soon as its main lane has a <code>kitchen.toml</code>.
+          </p>
+        </div>
+      </details>
     {/if}
-    {#if filesFailed}<p class="error" role="alert">{filesFailed}</p>{/if}
 
-    <div class="layout">
-      <nav class="panel parts" aria-label="Parts of the kitchen">
+    {#if kitchens === null}
+      {#if !failed}<Loading lines={3} />{/if}
+    {:else if kitchens.length === 0}
+      <Empty title="No kitchen yet">
+        None of the repositories you may read has a <code>kitchen.toml</code>, and none uses a kitchen. An admin of this
+        server starts one.
+      </Empty>
+    {:else}
+      <div>
+        <div class="cards">
+          {#each kitchens as one (one.name)}
+            {#if one.readable}
+              <a class="panel pad" href={pageOf(one.name)}>{@render card(one)}</a>
+            {:else}
+              <div class="panel pad">{@render card(one)}</div>
+            {/if}
+          {/each}
+        </div>
+        <p class="footnote">Only the repositories you may read are looked at.</p>
+      </div>
+    {/if}
+  </div>
+{:else if seen === null}
+  <PageHead title={k} back={toList} />
+  {#if failed}<Err message={failed} />{:else}<Loading lines={3} />{/if}
+{:else if !kitchen || !kitchen.readable}
+  <PageHead title={k} back={toList} />
+  <Empty title="No such kitchen for you">It is not a repository of this server you may read.</Empty>
+{:else}
+  <PageHead title={kitchen.title} back={toList}>
+    {#snippet lead()}
+      {kitchen.about || 'A kitchen of this server'}{#if kitchen.title !== k}&nbsp;· the repository {k}{/if} · you may {may}
+    {/snippet}
+    {#snippet actions()}
+      <a class="button sm" href={lanesOf(k)}>Its lanes</a>
+    {/snippet}
+  </PageHead>
+
+  <Err message={failed} />
+  {#if !kitchen.marked}
+    <p class="notice">
+      This repository has no <code>kitchen.toml</code>: the repositories that use it are given its
+      <code>instructions/</code>, and the kitchen plugin finds no behaviour, concepts or recipes in it.
+    </p>
+  {/if}
+  <Err message={filesFailed} />
+
+  {#if files !== null || !filesFailed}
+    <div class="cols left">
+      <nav class="panel groups" aria-label="Parts of the kitchen">
         {#if files === null}
           <Loading lines={4} inset />
         {:else}
           {#each groups as [title, paths]}
-            <h2>{title}</h2>
-            {#each paths as path}
-              <button class="bare file" aria-current={open?.path === path ? 'true' : undefined} onclick={() => show(path)}>
-                <span class="mono">{label(path)}</span>
-              </button>
-            {/each}
+            <h4>{title}</h4>
+            <ul class="rows tight">
+              {#each paths as path}
+                <li>
+                  <button class="row bare" aria-current={(wanted ?? open?.path) === path ? 'true' : undefined} onclick={() => show(path)}>
+                    <span class="row-title mono">{label(path)}</span>
+                  </button>
+                </li>
+              {/each}
+            </ul>
           {:else}
-            <p class="soft pad">Nothing in it yet.</p>
+            <Empty inset title="Nothing in it yet" />
           {/each}
           {#if mayWriteIn(k)}
-            <form class="new" onsubmit={startNew}>
-              <select class="sm" bind:value={fresh.kind} aria-label="What to write">
-                <option value="concepts">concept</option>
-                <option value="recipes">recipe</option>
-              </select>
-              <input class="sm" placeholder="name" aria-label="Its name" bind:value={fresh.name} />
-              <button class="sm" disabled={!fresh.name.trim()}>New</button>
-            </form>
+            <div class="panel-foot">
+              <form class="stack grow" onsubmit={startNew}>
+                <div><button type="button" class="sm" aria-expanded={adding} onclick={() => (adding = !adding)}>New</button></div>
+                {#if adding}
+                  <label class="field">
+                    <span>Kind</span>
+                    <select class="sm" bind:value={fresh.kind}>
+                      <option value="concepts">concept</option>
+                      <option value="recipes">recipe</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>Name</span>
+                    <input class="sm" bind:value={fresh.name} placeholder="rounding" use:focus />
+                  </label>
+                  <div class="controls">
+                    <button class="primary sm" disabled={!fresh.name.trim()}>Add</button>
+                    <button type="button" class="quiet sm" onclick={() => (adding = false)}>Cancel</button>
+                  </div>
+                {/if}
+              </form>
+            </div>
           {/if}
         {/if}
       </nav>
 
-      <section class="panel viewer">
-        {#if open}
-          <header>
-            <b class="mono">{open.path}</b>
-            {#if !open.fresh && kindOf(open.path) !== 'other' && isMarkdown(open.path) && ['concept', 'recipe'].includes(kindOf(open.path))}
-              <span class="faint first">{aboutOf(open.text)}</span>
-            {/if}
-            <span class="grow"></span>
-            {#if editing && isMarkdown(open.path)}
-              <div class="seg" role="group" aria-label="Text or preview">
-                <button aria-pressed={showing === 'edit'} onclick={() => (showing = 'edit')}>Text</button>
-                <button aria-pressed={showing === 'read'} onclick={() => (showing = 'read')}>Preview</button>
-              </div>
-            {:else if !editing && mayWriteIn(k)}
-              <button class="sm" onclick={startEdit}>Edit</button>
-            {/if}
-          </header>
-          {#if reading}
-            <Loading lines={5} inset />
-          {:else if editing}
-            <div class="edit">
-              {#if showing === 'edit' || !isMarkdown(open.path)}
-                <textarea class="mono" rows="18" bind:value={text} aria-label={`The text of ${open.path}`} spellcheck="false"></textarea>
-              {:else}
-                <div class="rendered">{@html markdown(text)}</div>
-              {/if}
-              <label class="field">
-                <span>Why <span class="hint">(what the lane is for, and what the log will say)</span></span>
-                <input bind:value={why} placeholder={`${open.fresh ? 'Write' : 'Change'} ${open.path} of the kitchen`} />
-              </label>
-              <div class="controls">
-                <button class="primary" disabled={saving !== '' || (!open.fresh && text === open.text) || !text.trim()} onclick={save}>
-                  {#if saving}{saving[0].toUpperCase()}{saving.slice(1)}…{:else if mayIntegrateIn(k)}Save and integrate{:else}Save in a lane{/if}
-                </button>
-                <button class="quiet" disabled={saving !== ''} onclick={() => (open.fresh ? (open = null) : (editing = false))}>Cancel</button>
-                <span class="faint small">
-                  {mayIntegrateIn(k)
-                    ? 'A lane is opened for it, then integrated: the kitchen is what its main lane has.'
-                    : 'A lane is opened for it; somebody who may integrate brings it in.'}
-                </span>
-              </div>
-              {#if saved && saved.result?.result !== 'integrated'}
-                <p class="notice">
-                  {#if saved.result === null}
-                    It waits in <a href={`${home}?repo=${encodeURIComponent(k)}#/lane/${encodeURIComponent(saved.lane)}`}>{saved.lane}</a> for somebody who may integrate.
-                  {:else}
-                    Not integrated ({saved.result.missing ?? saved.result.result.replaceAll('_', ' ')}): it is in
-                    <a href={`${home}?repo=${encodeURIComponent(k)}#/lane/${encodeURIComponent(saved.lane)}`}>{saved.lane}</a>.
-                  {/if}
-                </p>
-              {/if}
-            </div>
-          {:else if isMarkdown(open.path)}
-            <div class="rendered pad">{@html markdown(open.text)}</div>
-          {:else}
-            <pre class="code">{open.text}</pre>
-          {/if}
-        {:else if files !== null}
-          <Empty inset title="Pick a part of the kitchen">Its behaviour, a concept, a recipe, a tool or an instruction.</Empty>
+      <div class="stack">
+        {#if files === null || wanted !== null}
+          <div class="panel"><Loading lines={5} inset /></div>
+        {:else if readFailed}
+          <Err message={readFailed} />
+        {:else if open}
+          {#key open}
+            <Editor
+              name={open.path}
+              mono
+              text={open.text}
+              fresh={open.fresh}
+              editable={mayWriteIn(k)}
+              onsave={save}
+              oncancel={() => (open = null)}
+              hint={saveHint}
+            >
+              {#snippet fields()}
+                <label class="field">
+                  <span>Why</span>
+                  <input bind:value={why} placeholder={`${open?.fresh ? 'Write' : 'Change'} ${open?.path} of the kitchen`} />
+                  <span class="hint">What the lane is for, and what the log will say.</span>
+                </label>
+              {/snippet}
+            </Editor>
+          {/key}
+        {:else}
+          <Empty title="Pick a part of the kitchen">Its behaviour, a concept, a recipe, a tool or an instruction.</Empty>
         {/if}
-      </section>
-    </div>
-
-    {#if open && !open.fresh}
-      <h2 class="section-title">Changes to {open.path}</h2>
-      {#if history === null}
-        <Loading lines={2} />
-      {:else if history.length === 0}
-        <Empty title="No change recorded yet." />
-      {:else}
-        <div class="panel changes">
-          {#each history as item (item.id)}
-            <div class="change">
-              <b>{item.author}</b>
-              <span class="soft">{item.intent ? `“${item.intent}”` : (item.detail ?? item.op.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase())}</span>
-              {#if item.lane && !['main', 'lane/main'].includes(item.lane)}<a class="mono small" href={`${home}?repo=${encodeURIComponent(k)}#/lane/${encodeURIComponent(item.lane)}`}>{item.lane}</a>{/if}
-              <span class="grow"></span>
-              <span class="faint small">{ago(item.at_ms)}</span>
+        {#if waits}
+          <div class="result" role="status">
+            <div class="controls">
+              <p class="grow">
+                {#if waits.result === null}
+                  <span class="mono">{waits.path}</span> waits in
+                  <a class="ref" href={laneIn(k, waits.lane)}>{laneName(waits.lane)}</a> for somebody who may integrate.
+                {:else}
+                  <span class="mono">{waits.path}</span> is in
+                  <a class="ref" href={laneIn(k, waits.lane)}>{laneName(waits.lane)}</a>, not integrated:
+                  <State said={outcome(waits.result.result)} />
+                  {#if waits.result.missing}<span class="soft">{humanize(waits.result.missing)}</span>{/if}
+                {/if}
+              </p>
+              <button class="quiet sm icon" aria-label="Close" onclick={() => (waits = null)}><Icon name="close" /></button>
             </div>
-          {/each}
-        </div>
-        <p class="faint note">
-          An earlier text is not shown here yet: to put one back, edit the file again, or work in a lane of
-          <span class="mono">{k}</span> from a connected directory.
-        </p>
-      {/if}
-    {/if}
+          </div>
+        {/if}
+      </div>
+    </div>
+  {/if}
 
-    <h2 class="section-title">Repositories that use it</h2>
-    <p class="soft about">
-      An attached repository gives the kitchen's instructions to every assistant, before its own. Its maintainers attach
-      it; this sets <code>kitchen</code> in its configuration.
-    </p>
-    {#if (seen ?? []).filter((one) => one.name !== k).length === 0}
-      <Empty title="No other repository">There is no repository you may read to attach.</Empty>
+  {#if open && !open.fresh}
+    <h2 class="section-title">Changes to {wanted ?? open.path}</h2>
+    {#if historyFailed}
+      <Err message={historyFailed} />
+    {:else if history === null}
+      <Loading lines={2} />
     {:else}
       <div class="panel table-wrap">
         <table>
-          <thead><tr><th></th><th>Repository</th><th>Its kitchen now</th><th>You may</th></tr></thead>
+          <thead>
+            <tr><th>Who</th><th>What</th><th>Lane</th><th>When</th></tr>
+          </thead>
           <tbody>
-            {#each seen.filter((one) => one.name !== k) as one (one.name)}
+            {#each history as item (item.id)}
               <tr>
-                <td class="tick">
-                  <input
-                    type="checkbox"
-                    aria-label={`${one.name} uses ${k}`}
-                    disabled={!mayMaintain(one.name) || attaching}
-                    bind:checked={attach[one.name]}
-                  />
-                </td>
-                <td><a class="mono" href={`${home}?repo=${encodeURIComponent(one.name)}#/settings`}>{one.name}</a></td>
+                <td>{item.author}</td>
+                <td>{#if item.intent}<q class="reason">{item.intent}</q>{:else}{humanize(done(item))}{/if}</td>
                 <td>
-                  {#if one.uses === k}<span class="chip accent">this one</span>
-                  {:else if one.uses}<span class="mono">{one.uses}</span>{#if !one.usesFound}&nbsp;<span class="chip bad">not found</span>{/if}
-                  {:else}<span class="faint">the standard one</span>{/if}
+                  {#if !item.lane}
+                    <span class="none">None</span>
+                  {:else if ['main', 'lane/main'].includes(item.lane)}
+                    <span class="ref">main</span>
+                  {:else}
+                    <a class="ref" href={laneIn(k, item.lane)}>{laneName(item.lane)}</a>
+                  {/if}
                 </td>
-                <td class="soft">{mayMaintain(one.name) ? 'change it' : `${one.role}: a maintainer changes it`}</td>
+                <td class="soft"><Time ms={item.at_ms} /></td>
+              </tr>
+            {:else}
+              <tr>
+                <td colspan="4"><Empty inset title="No change recorded yet" /></td>
               </tr>
             {/each}
           </tbody>
         </table>
       </div>
-      <div class="controls apply">
-        <button class="primary" disabled={attaching || attachChanged.length === 0} onclick={applyAttach}>
-          {attaching ? 'Saving…' : attachChanged.length > 0 ? `Save ${attachChanged.length} ${attachChanged.length === 1 ? 'change' : 'changes'}` : 'Save'}
-        </button>
-        {#if attachChanged.some((one) => one.uses && one.uses !== k && attach[one.name])}
-          <span class="faint small">A repository that had another kitchen leaves it for this one.</span>
-        {/if}
-      </div>
+      <p class="footnote">
+        An earlier text is not shown here yet: to put one back, edit the file again, or work in a lane of {k} from a
+        connected directory.
+      </p>
     {/if}
+  {/if}
+
+  <h2 class="section-title">Repositories that use it</h2>
+  <p class="section-lead">
+    A repository that uses a kitchen gives the kitchen’s instructions to every assistant, before its own. Its
+    maintainers say which it uses: this sets <code>kitchen</code> in its configuration.
+  </p>
+  {#if others.length === 0}
+    <Empty title="No other repository">There is no other repository you may read that could use it.</Empty>
+  {:else}
+    <div class="stack">
+      <div class="panel table-wrap">
+        <table>
+          <thead>
+            <tr><th class="tick"><span class="sr">Uses it</span></th><th>Repository</th><th>Its kitchen now</th><th>You may</th></tr>
+          </thead>
+          <tbody>
+            {#each others as one (one.name)}
+              <tr>
+                <td class="tick">
+                  <input
+                    type="checkbox"
+                    aria-label={`${one.name} uses ${kitchen.title}`}
+                    disabled={!mayMaintain(one.name) || choosing}
+                    bind:checked={chosen[one.name]}
+                  />
+                </td>
+                <td><a href={lanesOf(one.name)}>{one.name}</a></td>
+                <td>
+                  {#if one.uses === k}
+                    <span class="chip accent">this one</span>
+                  {:else if one.uses && one.usesFound}
+                    <a href={pageOf(one.uses)}>{one.uses}</a>
+                  {:else if one.uses}
+                    {one.uses} <span class="chip bad">not found</span>
+                  {:else}
+                    <span class="soft">The standard one</span>
+                  {/if}
+                </td>
+                <td class="soft">{mayMaintain(one.name) ? 'Change it' : `${one.role}: a maintainer changes it`}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+      <div class="box">
+        <div class="controls">
+          <button class="primary" disabled={choosing || changes.length === 0} onclick={saveChoice}>{choosing ? 'Saving…' : 'Save'}</button>
+        </div>
+        <Err message={choiceFailed} />
+        <p class="hint">
+          A repository that is checked uses this kitchen; one that is unchecked uses the standard one again.
+          {#if changes.some((one) => one.uses && one.uses !== k && chosen[one.name])}
+            A repository that had another kitchen leaves it for this one.
+          {/if}
+        </p>
+      </div>
+    </div>
   {/if}
 {/if}
 
+{#snippet card(one)}
+  <div class="box">
+    <h3>{one.title}</h3>
+    {#if one.about}<p class="soft">{one.about}</p>{/if}
+    <div class="row-body">
+      {#if one.title !== one.name}<span class="row-meta">The repository {one.name}</span>{/if}
+      <span class="row-meta">
+        {one.users.length === 0 ? 'Used by no repository' : `Used by ${count(one.users.length, 'repository', 'repositories')}`}
+      </span>
+      {#if !one.readable}
+        <span class="row-meta">You may not read it</span>
+      {:else if !one.marked}
+        <span class="tag">Instructions only</span>
+      {/if}
+    </div>
+  </div>
+{/snippet}
+
 <style>
+  /* Its commands scroll inside it: a long one never makes it wider than the page. */
   .start {
-    margin: 0 0 16px;
-    padding: 0 16px;
-    font-size: 13px;
-  }
-  .start summary {
-    padding: 10px 0;
-    font-weight: 500;
-    cursor: pointer;
-  }
-  .start p {
-    margin: 0 0 8px;
-  }
-  .start pre {
-    margin: 0 0 8px;
-    padding: 8px 10px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    background: var(--bg);
-    font: 12.5px/1.6 var(--mono);
-    overflow-x: auto;
-  }
-  .start[open] {
-    padding-bottom: 8px;
-  }
-  .list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-  }
-  .list li + li {
-    border-top: 1px solid var(--line);
-  }
-  .row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    color: inherit;
-  }
-  .row:hover {
-    text-decoration: none;
-    background: var(--hover);
-  }
-  .body {
-    flex: 1;
-    min-width: 0;
-    display: grid;
-    gap: 2px;
-  }
-  .title {
-    font-weight: 500;
-  }
-  .meta {
-    font-size: 12.5px;
-    color: var(--soft);
-    overflow-wrap: anywhere;
-  }
-  .side {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-  }
-  .note {
-    margin: 8px 0 0;
-    font-size: 12.5px;
-  }
-  .back {
-    margin: 0 0 12px;
-    font-size: 13px;
-  }
-  .page-head .lead .mono {
-    font-size: 12.5px;
-  }
-  .page-head .button {
-    min-height: var(--control-sm);
-  }
-  .notice {
-    margin: 0 0 16px;
-  }
-  .layout {
-    display: grid;
-    grid-template-columns: 240px minmax(0, 1fr);
-    gap: 16px;
-    align-items: start;
-  }
-  @media (max-width: 760px) {
-    .layout {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  }
-  .parts {
-    padding: 8px;
-  }
-  .parts h2 {
-    margin: 12px 8px 4px;
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--soft);
-  }
-  .parts h2:first-child {
-    margin-top: 4px;
-  }
-  .file {
-    display: flex;
-    align-items: center;
-    width: 100%;
-    min-height: 30px;
-    padding: 0 8px;
-    border-radius: var(--radius);
-    color: var(--ink);
-    font-size: 13px;
-    cursor: pointer;
-    overflow-wrap: anywhere;
-  }
-  .file:hover {
-    background: var(--hover);
-  }
-  .file[aria-current='true'] {
-    background: var(--accent-wash);
-    color: var(--accent);
-    font-weight: 500;
-  }
-  .pad {
-    margin: 0;
-    padding: 8px;
-    font-size: 13px;
-  }
-  .new {
-    display: flex;
-    gap: 6px;
-    margin: 12px 0 4px;
-    padding-top: 12px;
-    border-top: 1px solid var(--line);
-  }
-  .new select {
-    flex: none;
-  }
-  .new input {
-    flex: 1;
     min-width: 0;
   }
-  .viewer {
-    min-width: 0;
-    overflow: hidden;
-  }
-  .viewer header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-    min-height: 44px;
-    padding: 6px 16px;
-    border-bottom: 1px solid var(--line);
-    font-size: 13px;
-  }
-  .first {
-    font-size: 12.5px;
-  }
-  .grow {
-    flex: 1;
-  }
-  .rendered {
-    padding: 16px 20px;
-    font-size: 14px;
-    line-height: 1.6;
-    overflow-wrap: anywhere;
-  }
-  .rendered :global(h1),
-  .rendered :global(h2),
-  .rendered :global(h3) {
-    margin: 0 0 8px;
-  }
-  .rendered :global(h1) {
-    font-size: 18px;
-  }
-  .rendered :global(p) {
-    margin: 0 0 10px;
-  }
-  .rendered :global(pre) {
-    background: var(--bg);
-    border: 1px solid var(--line);
-    padding: 8px 10px;
-    border-radius: 6px;
-    overflow: auto;
-  }
-  .code {
-    margin: 0;
-    padding: 16px 20px;
-    font: 12.5px/1.6 var(--mono);
-    overflow-x: auto;
-  }
-  .edit {
-    display: grid;
-    gap: 12px;
-    padding: 16px;
-  }
-  .edit .rendered {
-    padding: 0;
-    max-height: 60vh;
-    overflow: auto;
-  }
-  .edit textarea {
-    font-family: var(--mono);
-    font-size: 12.5px;
-  }
-  .small {
-    font-size: 12.5px;
-  }
-  .changes {
-    overflow: hidden;
-  }
-  .change {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-    min-height: 40px;
-    padding: 6px 16px;
-    font-size: 13px;
-  }
-  .change + .change {
-    border-top: 1px solid var(--line);
-  }
-  .change b {
-    font-weight: 600;
-  }
-  .about {
-    margin: -4px 0 10px;
-    font-size: 13px;
-  }
+  /* The column of what is checked: as wide as the box in it. */
   .tick {
     width: 36px;
-  }
-  .apply {
-    margin-top: 12px;
   }
 </style>

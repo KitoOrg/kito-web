@@ -1,25 +1,19 @@
 <script>
   // What was said about a lane, in the order it was said: the lane
   // opened, the comments and their answers, the verdicts; then what is
-  // left to decide, and a place to say something.
-  import { ago, laneLink } from './api.js';
+  // left to decide.
+  import { laneLink } from './api.js';
+  import { who } from './format.js';
+  import { verdictStanding } from './standing.js';
   import Conflicts from './Conflicts.svelte';
   import Face from './Face.svelte';
+  import State from './State.svelte';
   import Thread from './Thread.svelte';
+  import Time from './Time.svelte';
 
-  let {
-    lane,
-    info,
-    seen = null,
-    threads,
-    verdicts,
-    conflicts,
-    target = 'main',
-    role = undefined,
-    user = null,
-    resolved = $bindable(false),
-    changed,
-  } = $props();
+  // `title`: what the page is headed with. An intent that is not it is
+  // said where the lane was opened.
+  let { lane, info, title = '', seen = null, threads, verdicts, conflicts, target = 'main', resolved = $bindable(false), changed, mayWrite = true } = $props();
 
   let events = $derived(
     [
@@ -30,26 +24,17 @@
 
   // When the lane said what it would change first: when it was opened.
   let opened = $derived(Math.min(...(seen?.scope ?? []).map((item) => item.at_ms).filter((at) => at > 0)));
-
-  const who = (said) => (said.for ? `${said.by}, of ${said.for}` : said.by);
-  const tone = { approved: 'ok', changes_requested: 'bad' };
 </script>
 
 <ol class="timeline">
   <li class="ev">
     <Face name={info.agent} agent assistant={info.assistant} />
-    <div class="panel card">
-      <p class="who">
-        <b>{info.agent}</b> opened this lane{#if info.owner && info.owner !== info.agent}&nbsp;for {info.owner}{/if}
-        {#if Number.isFinite(opened)}<span class="faint">· {ago(opened)}</span>{/if}
+    <div class="body opened">
+      <p>
+        <b>{who(info.agent, info.owner)}</b> opened this lane
+        {#if Number.isFinite(opened)}<span class="small faint">· <Time ms={opened} /></span>{/if}
       </p>
-      <p class="text">{info.intent ?? 'No intent was said.'}</p>
-      {#if info.task}<p class="soft small">Task: {info.task}</p>{/if}
-      {#if info.scope?.length > 0}
-        <p class="soft small">
-          Declared: {#each info.scope as item, i}<span class="mono">{item}</span>{#if i < info.scope.length - 1},&nbsp;{/if}{/each}
-        </p>
-      {/if}
+      {#if info.intent && info.intent !== title}<p><q class="reason">{info.intent}</q></p>{/if}
     </div>
   </li>
   {#each events as event (event.key)}
@@ -59,48 +44,50 @@
         <Face name={said.by} agent={Boolean(said.for)} assistant={said.by === info.agent ? info.assistant : null} />
         <div class="body">
           {#if said.on}
-            <p class="on soft">
-              On <a class="mono" href={`${laneLink(lane)}?tab=changes&at=${encodeURIComponent(event.thread.file ?? '')}`}>{said.on}</a>
+            <p class="small soft">
+              On <a class="ref" href={`${laneLink(lane)}?tab=changes&at=${encodeURIComponent(event.thread.file ?? '')}`}>{said.on}</a>
             </p>
           {/if}
-          {#if said.quoted && !said.outdated}<pre class="quoted">{said.quoted}</pre>{/if}
-          <Thread {lane} comment={said} answers={event.thread.answers} {changed} />
+          <Thread {lane} comment={said} answers={event.thread.answers} {changed} {mayWrite} quote />
         </div>
       </li>
     {:else}
       {@const verdict = event.verdict}
-      <li class="ev small">
-        <span class="dot" aria-hidden="true"></span>
-        <p>
-          <span class={`chip ${tone[verdict.verdict] ?? ''}`}>{verdict.verdict.replaceAll('_', ' ')}</span>
-          by {who(verdict)}
-          {#if verdict.at_ms}<span class="faint">· {ago(verdict.at_ms)}</span>{/if}
-          {#if verdict.text}<span class="soft">: {verdict.text}</span>{/if}
-          {#if verdict.because}<span class="faint"> (does not count: {verdict.because})</span>{/if}
-        </p>
+      {@const stands = verdictStanding(verdict.verdict)}
+      <li class="ev">
+        <span class={['ring', stands.tone, 'mark']} aria-hidden="true"></span>
+        <div class="body">
+          <p>
+            <b>{who(verdict.by, verdict.for)}</b>
+            <State said={stands} plain />
+            {#if verdict.at_ms}<span class="small faint">· <Time ms={verdict.at_ms} /></span>{/if}
+            {#if verdict.because}<span class="small faint">· does not count: {verdict.because}</span>{/if}
+          </p>
+          {#if verdict.text}<p class="said">{verdict.text}</p>{/if}
+        </div>
       </li>
     {/if}
   {/each}
 </ol>
 
-{#if conflicts.length > 0}
-  <Conflicts {conflicts} {target} {changed} />
-{/if}
-
-
-<label class="check soft toggle">
+<label class="check shown">
   <input type="checkbox" bind:checked={resolved} /> Show resolved comments
 </label>
 
+{#if conflicts.length > 0}
+  <Conflicts {conflicts} {target} {changed} {mayWrite} />
+{/if}
+
 <style>
   .timeline {
-    list-style: none;
-    margin: 0;
-    padding: 0;
     position: relative;
     display: grid;
-    gap: 14px;
+    gap: 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
   }
+  /* The line everything said hangs on. */
   .timeline::before {
     content: '';
     position: absolute;
@@ -114,66 +101,25 @@
     position: relative;
     display: grid;
     grid-template-columns: 26px minmax(0, 1fr);
-    gap: 10px;
+    gap: 12px;
     align-items: start;
-  }
-  .ev.small {
-    font-size: 13px;
-    align-items: center;
-  }
-  .ev.small p {
-    margin: 0;
-  }
-  .dot {
-    justify-self: center;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: var(--line);
-    border: 2px solid var(--bg);
-    box-sizing: content-box;
-  }
-  .card {
-    padding: 12px 16px;
-    font-size: 13px;
-  }
-  .who {
-    margin: 0 0 4px;
-    font-size: 13px;
-    color: var(--soft);
-  }
-  .who b {
-    color: var(--ink);
-  }
-  .text {
-    margin: 0;
-    overflow-wrap: anywhere;
-  }
-  .small {
-    margin: 6px 0 0;
-    font-size: 13px;
-    overflow-wrap: anywhere;
   }
   .body {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 6px;
-    min-width: 0;
   }
-  .on {
-    margin: 0;
-    font-size: 13px;
+  /* Beside a face: its one line stands at the middle of it. */
+  .opened {
+    padding-top: 4px;
   }
-  .quoted {
-    margin: 0;
-    padding: 6px 10px;
-    border-left: 3px solid var(--line);
-    background: var(--panel);
-    color: var(--soft);
-    font: 12px/1.5 var(--mono);
-    overflow-x: auto;
+  /* A verdict, on the line: its tone, and nothing of the line through it. */
+  .mark {
+    justify-self: center;
+    background: var(--bg);
   }
-  .toggle {
-    margin-top: 4px;
-    color: var(--soft);
+  /* Pressed on its words, not across the page. */
+  .shown {
+    justify-self: start;
   }
 </style>

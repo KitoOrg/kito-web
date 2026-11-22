@@ -13,10 +13,11 @@
 </script>
 
 {#if known}
+  <!-- The two letters stand for a name: said in full to whoever points at them. -->
   <span class="assistant" title={known.title}>
-    <span class={`mark ${known.colour}`} class:big aria-hidden="true">{known.letters}</span>
+    <span class={['mark', known.colour]} class:big aria-hidden="true">{known.letters}</span>
     {#if words}
-      <span class="words">{known.label}{#if assistant.model}&nbsp;· <span class="mono">{assistant.model}</span>{/if}</span>
+      <span class="soft">{known.label}{#if assistant.model}&nbsp;· <span class="mono">{assistant.model}</span>{/if}</span>
     {:else}
       <span class="sr">{known.title}</span>
     {/if}
@@ -33,21 +34,20 @@
   .mark {
     display: inline-grid;
     place-items: center;
-    width: 20px;
+    width: 22px;
     height: 18px;
-    border-radius: 5px;
+    border-radius: var(--radius);
     border: 1px solid var(--line);
     background: var(--bg);
     color: var(--soft);
-    font: 700 10px/1 var(--sans);
-    letter-spacing: 0.01em;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
     flex: none;
   }
   .mark.big {
     width: 26px;
     height: 26px;
-    border-radius: 6px;
-    font-size: 11px;
   }
   .mark.amber {
     background: var(--warn-bg);
@@ -65,12 +65,8 @@
     border-color: transparent;
   }
   .mark.blue {
-    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    background: var(--accent-wash);
     color: var(--accent);
     border-color: transparent;
-  }
-  .words {
-    color: var(--soft);
-    font-size: 13px;
   }
 </style>

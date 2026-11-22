@@ -1,12 +1,16 @@
 <script>
   import { behindServer, info, me, signOut } from './api.js';
   import { survey } from './needs.js';
+  import { shell } from './shell.svelte.js';
   import Admin from './Admin.svelte';
   import Audit from './Audit.svelte';
   import Backups from './Backups.svelte';
   import Board from './Board.svelte';
   import Code from './Code.svelte';
+  import Empty from './Empty.svelte';
+  import Err from './Err.svelte';
   import Home from './Home.svelte';
+  import Icon from './Icon.svelte';
   import Insights from './Insights.svelte';
   import Kitchens from './Kitchens.svelte';
   import Search from './Search.svelte';
@@ -14,7 +18,9 @@
   import Lane from './Lane.svelte';
   import Log from './Log.svelte';
   import Logo from './Logo.svelte';
+  import NoAccess from './NoAccess.svelte';
   import Notes from './Notes.svelte';
+  import PageHead from './PageHead.svelte';
   import People from './People.svelte';
   import Repositories from './Repositories.svelte';
   import Settings from './Settings.svelte';
@@ -29,8 +35,7 @@
   let route = $state(location.hash);
   // On a phone, what does not fit the bar is behind a menu button.
   let menu = $state(false);
-  // The server's own pages, for its admins, and the account: each behind
-  // one button of the bar.
+  // The server's own pages and the account: each behind one button of the bar.
   let drop = $state('');
   $effect(() => {
     const away = (event) => {
@@ -71,9 +76,24 @@
       }
       said.known = Boolean(repo);
     }
+    // What the head of each page says after its own name.
+    shell.repo = said.repository ?? null;
     about = said;
   }
   start().catch((error) => (failed = error.message));
+
+  // A repository was added, a plugin enabled: who is signed in, what they
+  // may use and what runs on the server are asked for again.
+  let asked = 0;
+  $effect(() => {
+    if (shell.stale === asked) return;
+    asked = shell.stale;
+    me()
+      .then((now) => now && (who = now))
+      .catch(() => {
+        // What the page has stays.
+      });
+  });
 
   let role = $derived(who?.repos.find((one) => one.name === repo)?.role);
   // The server's own pages, whatever repository is looked at.
@@ -141,15 +161,11 @@
   // The part of the client a page belongs to.
   let part = $derived(page.name === 'lane' ? 'lanes' : page.name);
 
-  $effect(() => {
-    const where = page.name === 'lane' ? `lane/${page.lane} · ` : page.name === 'why' && page.target ? `${page.target} · ` : '';
-    document.title = about?.repository ? `${where}${about.repository} · Kito` : 'Kito';
-  });
-
   // Who uses a repository: for its maintainers and the server's admins.
   let mayManage = $derived(role === 'maintain' || Boolean(who?.admin));
   // The plugins that run on the server (Kito 0.36.2); one that does not say runs them all.
   let running = $derived((name) => who?.plugins === undefined || who.plugins.includes(name));
+  // The parts of a repository: each is a tab, and the title of its page.
   let parts = $derived([
     ['lanes', '#/', 'Lanes'],
     ['tasks', '#/tasks', 'Tasks'],
@@ -160,124 +176,133 @@
     ['instructions', '#/instructions', 'Instructions'],
     ...(about?.team && mayManage ? [['people', '#/people', 'People'], ['settings', '#/settings', 'Settings']] : []),
   ]);
+  // The server's own pages: for everybody what everybody may read, for its
+  // admins the rest. Each is an entry of the Server menu, and the title of
+  // its page.
+  let serverPages = $derived(
+    !about?.team || !who
+      ? []
+      : [
+          ...(who.admin ? [['people', 'People'], ['repositories', 'Repositories']] : []),
+          ...(running('kitchen') ? [['kitchens', 'Kitchens']] : []),
+          ...(who.admin ? [['admin', 'Plugins']] : []),
+          ['insights', 'Insights'],
+          ...(who.admin ? [['audit', 'Audit log'], ['backups', 'Backups']] : []),
+        ],
+  );
+  let onServerPage = $derived(!repo && serverPages.some(([name]) => name === page.name));
 </script>
 
 <header class="top">
-  <a class="logo" href={about?.team ? home : '#/'}><Logo /> Kito</a>
-  {#if about?.team && who}
-    <span class="crumb">
-      <a class="host" href={home}>{location.host}</a>
-      {#if who.repos.length > 0}
-        <span class="slash host">/</span>
-        <select aria-label="Repository" value={repo ?? ''} onchange={(event) => choose(event.currentTarget.value)}>
-          <option value="">every repository</option>
-          {#each who.repos as one}
-            <option value={one.name}>{one.name}</option>
-          {/each}
-        </select>
-      {/if}
-    </span>
-  {:else if about?.repository}
-    <span class="crumb" title={about.path}><b>{about.repository}</b></span>
-  {/if}
-  <span class="grow"></span>
-  {#if about?.team && who}
-    <a class="link needs" href={home} aria-current={!repo && page.name === 'lanes' ? 'page' : undefined}>
-      Needs you{#if seen?.needs.length > 0}<i>{seen.needs.length}</i>{/if}
-    </a>
-  {/if}
-  {#if about?.known || (about?.team && who)}
-    <button class="bare menu"aria-expanded={menu} aria-label="Menu" onclick={() => (menu = !menu)}>{menu ? '✕' : '☰'}</button>
-  {/if}
-  <div class="more" class:open={menu}>
-  {#if about?.known || (about?.team && who)}
-    <form
-      class="find"
-      onsubmit={(event) => {
-        event.preventDefault();
-        const q = new FormData(event.currentTarget).get('q') ?? '';
-        location.hash = `#/search?q=${encodeURIComponent(q)}`;
-        menu = false;
-      }}
-    >
-      <input name="q" placeholder="Search what was done" aria-label="Search" />
-    </form>
-  {/if}
-  {#if about?.team && who}
-    {#if who.admin}
-      {@const serverPage = ['people', 'repositories', 'kitchens', 'admin', 'audit', 'backups'].includes(page.name) && !(page.name === 'people' && repo)}
-      <div class="dropper">
-        <button
-          class="bare link toggle"
-          aria-expanded={drop === 'server'}
-          aria-current={serverPage ? 'page' : undefined}
-          onclick={() => (drop = drop === 'server' ? '' : 'server')}>Server <span class="caret">▾</span></button
-        >
-        <div class="drop" class:shown={drop === 'server'}>
-          <a href={`${home}#/people`} aria-current={!repo && page.name === 'people' ? 'page' : undefined}>People</a>
-          <a href={`${home}#/repositories`} aria-current={page.name === 'repositories' ? 'page' : undefined}>Repositories</a>
-          {#if running('kitchen')}
-            <a href={`${home}#/kitchens`} aria-current={page.name === 'kitchens' ? 'page' : undefined}>Kitchens</a>
-          {/if}
-          <a href="#/admin" aria-current={page.name === 'admin' ? 'page' : undefined}>Plugins</a>
-          <a href={`${home}#/audit`} aria-current={page.name === 'audit' ? 'page' : undefined}>Audit log</a>
-          <a href={`${home}#/backups`} aria-current={page.name === 'backups' ? 'page' : undefined}>Backups</a>
-        </div>
-      </div>
+  <div class="wrap bar">
+    <a class="logo" href={about?.team ? home : '#/'}><Logo /> Kito</a>
+    {#if about?.team && who}
+      <span class="crumb">
+        <a class="host mono" href={home}>{location.host}</a>
+        {#if who.repos.length > 0}
+          <span class="host">/</span>
+          <select aria-label="Repository" value={repo ?? ''} onchange={(event) => choose(event.currentTarget.value)}>
+            <option value="">Every repository</option>
+            {#each who.repos as one}
+              <option value={one.name}>{one.name}</option>
+            {/each}
+          </select>
+        {/if}
+      </span>
+    {:else if about?.repository}
+      <span class="crumb"><b>{about.repository}</b></span>
     {/if}
-    <div class="dropper">
-      <button class="bare who"title="Signed in" aria-expanded={drop === 'me'} onclick={() => (drop = drop === 'me' ? '' : 'me')}
-        >{who.user}</button
-      >
-      <div class="drop right" class:shown={drop === 'me'}>
-        <span class="faint">Signed in as <b>{who.user}</b>{who.role ? ` · ${who.role}` : ''}</span>
-        <button class="bare out"onclick={leave}>Sign out</button>
-      </div>
+    <span class="grow"></span>
+    {#if about?.team && who}
+      <a class="link needs" href={home} aria-current={!repo && page.name === 'lanes' ? 'page' : undefined}>
+        Needs you{#if seen?.needs.length > 0}<span class="count chrome">{seen.needs.length}</span>{/if}
+      </a>
+    {/if}
+    {#if about?.known || (about?.team && who)}
+      <button class="bare menu" aria-expanded={menu} aria-label="Menu" onclick={() => (menu = !menu)}>
+        <Icon name={menu ? 'close' : 'menu'} />
+      </button>
+    {/if}
+    <div class="more" class:open={menu}>
+      {#if about?.known || (about?.team && who)}
+        <form
+          class="find"
+          onsubmit={(event) => {
+            event.preventDefault();
+            const q = new FormData(event.currentTarget).get('q') ?? '';
+            location.hash = `#/search?q=${encodeURIComponent(q)}`;
+            menu = false;
+          }}
+        >
+          <input name="q" placeholder="Search what was done" aria-label="Search what was done" />
+        </form>
+      {/if}
+      {#if about?.team && who}
+        {#if serverPages.length > 0}
+          <div class="dropper">
+            <button
+              class="bare link toggle"
+              aria-expanded={drop === 'server'}
+              aria-current={onServerPage ? 'page' : undefined}
+              onclick={() => (drop = drop === 'server' ? '' : 'server')}>Server <Icon name="chevron-down" size={12} /></button
+            >
+            <div class="drop" class:shown={drop === 'server'}>
+              {#each serverPages as [name, label]}
+                <a href={`${home}#/${name}`} aria-current={!repo && page.name === name ? 'page' : undefined}>{label}</a>
+              {/each}
+            </div>
+          </div>
+        {/if}
+        <div class="dropper">
+          <button class="bare who" aria-label={`Signed in as ${who.user}`} aria-expanded={drop === 'me'} onclick={() => (drop = drop === 'me' ? '' : 'me')}
+            >{who.user}</button
+          >
+          <div class="drop right" class:shown={drop === 'me'}>
+            <span class="signed small">Signed in as <b>{who.user}</b>{who.role ? `, ${who.role} of this server` : ''}</span>
+            <button class="bare out" onclick={leave}>Sign out</button>
+          </div>
+        </div>
+      {:else if about?.kito}
+        <span class="version small">Kito {about.kito} · web {about.version}</span>
+      {/if}
     </div>
-  {:else if about?.kito}
-    <span class="version">Kito {about.kito} · web {about.version}</span>
-  {/if}
   </div>
 </header>
 
-{#if about?.known && page.name !== 'admin'}
+{#if about?.known}
   <nav class="tabs" aria-label="Parts of the repository">
-    {#each parts as [name, href, label]}
-      <a {href} aria-current={part === name ? 'page' : undefined}>
-        {label}{#if name === 'lanes' && openLanes !== null}<span class="count">{openLanes}</span>{/if}
-      </a>
-    {/each}
-    {#if role === 'read'}
-      <span class="chip only" title="You may read this repository, and change nothing in it">read only</span>
-    {/if}
+    <div class="wrap bar">
+      {#each parts as [name, href, label]}
+        <a {href} aria-current={part === name ? 'page' : undefined}>
+          {label}{#if name === 'lanes' && openLanes !== null}<span class="count">{openLanes}</span>{/if}
+        </a>
+      {/each}
+      {#if role === 'read'}
+        <span class="chip only">read only</span>
+      {/if}
+    </div>
   </nav>
 {/if}
 
-<main>
+<main class="wrap">
   {#if failed}
-    <p class="error">{failed}</p>
+    <Err message={failed} />
   {:else if about === null}
     <Loading />
   {:else if about.team && !who}
     <SignIn />
-  {:else if about.team && page.name === 'admin'}
-    <!-- The server's own: whatever repository is looked at, or none. -->
-    {#if who.admin}
+  {:else if about.team && ['admin', 'audit', 'backups', 'repositories'].includes(page.name)}
+    <!-- The server's own, for its admins: whatever repository is looked at, or none. -->
+    {#if !who.admin}
+      <NoAccess title={serverTitle(page.name)} />
+    {:else if page.name === 'admin'}
       <Admin />
+    {:else if page.name === 'audit'}
+      <Audit />
+    {:else if page.name === 'backups'}
+      <Backups />
     {:else}
-      <div class="panel closed">
-        <h1>For the server’s administrators</h1>
-        <p class="soft">Whoever runs this server says who they are, on its machine.</p>
-      </div>
-    {/if}
-  {:else if about.team && ['audit', 'backups', 'repositories'].includes(page.name)}
-    {#if who.admin}
-      {#if page.name === 'audit'}<Audit />{:else if page.name === 'backups'}<Backups />{:else}<Repositories owner={who.role === 'owner'} />{/if}
-    {:else}
-      <div class="panel closed">
-        <h1>For the server’s admins</h1>
-        <p class="soft">The repositories, the audit log and the backups are for those who run this server.</p>
-      </div>
+      <Repositories owner={who.role === 'owner'} />
     {/if}
   {:else if about.team && page.name === 'kitchens'}
     <!-- The server's own, for whoever signed in: each sees the kitchens they may read. -->
@@ -286,10 +311,8 @@
         <Kitchens {who} k={page.k} />
       {/key}
     {:else}
-      <div class="panel closed">
-        <h1>No kitchen here</h1>
-        <p class="soft">The kitchen plugin does not run on this server: an admin enables it on the Plugins page.</p>
-      </div>
+      <PageHead title="Kitchens" />
+      <Empty title="No kitchen plugin on this server">An admin enables it on the <a href={`${home}#/admin`}>Plugins</a> page.</Empty>
     {/if}
   {:else if about.team && !repo && page.name === 'search'}
     {#key page.q}
@@ -301,21 +324,14 @@
     {#if who.admin}
       <People {who} />
     {:else}
-      <div class="panel closed">
-        <h1>For the server’s admins</h1>
-        <p class="soft">The people of a repository are on its own page, for its maintainers.</p>
-      </div>
+      <NoAccess title="People" />
     {/if}
   {:else if about.team && !repo}
     <Home {seen} {who} />
   {:else if !about.known}
-    <div class="panel closed">
-      <h1>This browser was not given the address</h1>
-      <p class="soft">
-        Open the address <code>kito web</code> printed when it started, the whole of it: it carries what lets this
-        browser in, once.
-      </p>
-    </div>
+    <Empty title="This browser has no access">
+      Open the address <code>kito web</code> printed when it started, the whole of it: it carries what gives this browser access, once.
+    </Empty>
   {:else if page.name === 'lane'}
     {#key page.lane}
       <Lane lane={page.lane} tab={page.tab} at={page.at} user={who?.user ?? null} {role} />
@@ -323,7 +339,7 @@
   {:else if page.name === 'why' && page.target?.includes(':')}
     <!-- A function, or some lines: all that is known of it. -->
     {#key `${page.target} ${page.lane}`}
-      <Why target={page.target} lane={page.lane} />
+      <Why target={page.target} lane={page.lane} {role} />
     {/key}
   {:else if page.name === 'why'}
     <!-- The files, and one of them read with its reasons. -->
@@ -339,25 +355,30 @@
       <Insights {repo} team={Boolean(about.team)} />
     {/key}
   {:else if page.name === 'tasks'}
-    {#key `${repo} ${page.task}`}
+    {#key repo}
       <Tasks {role} user={who?.user ?? null} open={page.task} />
     {/key}
   {:else if page.name === 'instructions'}
     {#key repo}
       <Instructions {repo} {who} {role} />
     {/key}
-  {:else if page.name === 'settings' && about.team && mayManage}
-    {#key repo}
-      <Settings {repo} {who} />
-    {/key}
-  {:else if page.name === 'people' && about.team && mayManage}
-    {#key repo}
-      <People {repo} {who} />
-    {/key}
+  {:else if (page.name === 'settings' || page.name === 'people') && about.team}
+    <!-- For the repository's maintainers and the server's admins. -->
+    {#if !mayManage}
+      <NoAccess title={page.name === 'settings' ? 'Settings' : 'People'} who="maintainers" />
+    {:else if page.name === 'settings'}
+      {#key repo}
+        <Settings {repo} {who} />
+      {/key}
+    {:else}
+      {#key repo}
+        <People {repo} {who} />
+      {/key}
+    {/if}
   {:else if page.name === 'log'}
     <Log />
   {:else if page.name === 'notes'}
-    <Notes />
+    <Notes {role} />
   {:else}
     <Board user={who?.user ?? null} {role} />
   {/if}
@@ -365,15 +386,26 @@
 
 <Toasts />
 
+<script module>
+  // The title of each of the server's own pages: the words of its menu entry.
+  const SERVER_TITLES = { admin: 'Plugins', audit: 'Audit log', backups: 'Backups', repositories: 'Repositories' };
+  const serverTitle = (name) => SERVER_TITLES[name] ?? name;
+</script>
+
 <style>
+  /* The bar is dark in both themes: what is on it is drawn for it. */
   .top {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    min-height: 48px;
-    padding: 8px 20px;
     background: var(--chrome);
     color: var(--chrome-ink);
+  }
+  .bar {
+    display: flex;
+    align-items: center;
+  }
+  .top .bar {
+    gap: 12px;
+    min-height: 48px;
+    padding-block: 8px;
     flex-wrap: wrap;
   }
   .top a {
@@ -383,7 +415,7 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    font-weight: 650;
+    font-weight: 600;
     font-size: 15px;
     letter-spacing: -0.01em;
     /* The mark's own colour, on the dark bar. */
@@ -396,110 +428,71 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-family: var(--mono);
-    font-size: 13px;
+    min-width: 0;
   }
   .host {
-    opacity: 0.75;
+    color: var(--chrome-soft);
   }
-  .slash {
-    opacity: 0.4;
-  }
-  select {
-    height: 28px;
-    font: 600 13px var(--mono);
+  .top select,
+  .find input {
+    height: var(--control-sm);
     color: inherit;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    border-radius: 6px;
+    background: var(--chrome-fill);
+    border-color: var(--chrome-line);
+  }
+  .top select {
+    font-weight: 500;
     padding: 0 6px;
   }
-  select option {
+  .top select option {
     color: var(--ink);
     background: var(--panel);
   }
-  select:focus,
+  .top select:focus,
   .find input:focus {
     border-color: var(--on-chrome);
-    box-shadow: 0 0 0 3px rgba(170, 165, 247, 0.25);
-  }
-  .grow {
-    flex: 1;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--on-chrome) 25%, transparent);
   }
   .more {
     display: contents;
   }
   .menu {
     display: none;
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    background: rgba(255, 255, 255, 0.08);
+    place-items: center;
+    width: var(--control);
+    height: var(--control);
+    border: 1px solid var(--chrome-line);
+    border-radius: var(--radius);
+    background: var(--chrome-fill);
     color: inherit;
-    border-radius: 6px;
-    width: 36px;
-    height: 36px;
-    font-size: 15px;
-    line-height: 1;
-    text-align: center;
     cursor: pointer;
   }
   .find input {
-    height: 28px;
-    font-size: 13px;
-    color: inherit;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    border-radius: 6px;
-    padding: 0 10px;
     width: 200px;
   }
   .find input::placeholder {
-    color: rgba(240, 239, 250, 0.55);
+    color: var(--chrome-soft);
   }
   .link {
     display: inline-flex;
     align-items: center;
-    height: 28px;
-    font-size: 13px;
-    font-weight: 500;
+    gap: 6px;
+    height: var(--control-sm);
     padding: 0 10px;
-    border-radius: 6px;
-    opacity: 0.85;
-  }
-  .link:hover {
-    text-decoration: none;
-    opacity: 1;
-    background: rgba(255, 255, 255, 0.06);
-  }
-  .link[aria-current='page'] {
-    background: rgba(255, 255, 255, 0.12);
-    opacity: 1;
-  }
-  .link i {
-    font-style: normal;
-    display: inline-grid;
-    place-items: center;
-    min-width: 18px;
-    height: 18px;
-    margin-left: 6px;
-    padding: 0 5px;
-    border-radius: 999px;
-    background: var(--on-chrome);
-    color: var(--chrome);
-    font-size: 11px;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-  }
-  .dropper {
-    position: relative;
-  }
-  .toggle {
-    gap: 4px;
+    border-radius: var(--radius);
+    font-weight: 500;
     color: inherit;
     cursor: pointer;
   }
-  .caret {
-    font-size: 10px;
-    opacity: 0.7;
+  .link:hover {
+    text-decoration: none;
+    background: var(--chrome-fill);
+  }
+  .link[aria-current='page'] {
+    background: var(--chrome-fill-strong);
+  }
+  .dropper {
+    position: relative;
   }
   .drop {
     display: none;
@@ -512,7 +505,7 @@
     background: var(--panel);
     color: var(--ink);
     border: 1px solid var(--line);
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
     box-shadow: var(--menu-shadow);
     z-index: 30;
   }
@@ -523,16 +516,18 @@
   .drop.shown {
     display: flex;
   }
-  .drop a {
+  .drop a,
+  .drop .out {
     display: flex;
     align-items: center;
-    height: 32px;
+    height: var(--control);
     padding: 0 10px;
-    border-radius: 5px;
-    font-size: 13px;
+    border-radius: var(--radius);
     color: var(--ink);
+    cursor: pointer;
   }
-  .drop a:hover {
+  .drop a:hover,
+  .drop .out:hover {
     background: var(--hover);
     text-decoration: none;
   }
@@ -540,72 +535,55 @@
     font-weight: 600;
     color: var(--accent);
   }
-  .drop > span {
+  .signed {
     padding: 8px 10px;
     margin-bottom: 4px;
     border-bottom: 1px solid var(--line);
-    font-size: 12px;
-  }
-  .drop .out {
-    display: flex;
-    align-items: center;
-    height: 32px;
-    padding: 0 10px;
-    border-radius: 5px;
-    color: var(--ink);
-    opacity: 1;
-  }
-  .drop .out:hover {
-    background: var(--hover);
+    color: var(--soft);
+    white-space: nowrap;
   }
   .who {
     display: inline-grid;
     place-items: center;
-    min-width: 28px;
-    height: 28px;
+    min-width: var(--control-sm);
+    height: var(--control-sm);
     padding: 0 10px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.12);
+    background: var(--chrome-fill-strong);
     color: inherit;
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
   }
   .who:hover {
-    background: rgba(255, 255, 255, 0.2);
-  }
-  .out {
-    font-size: 13px;
-    color: inherit;
-    opacity: 0.75;
-    cursor: pointer;
-  }
-  .out:hover {
-    opacity: 1;
+    background: var(--chrome-line);
   }
   .version {
-    font-size: 12px;
-    opacity: 0.7;
+    color: var(--chrome-soft);
   }
   .tabs {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    padding: 0 20px;
     background: var(--panel);
     border-bottom: 1px solid var(--line);
+  }
+  .tabs .bar {
+    gap: 2px;
     overflow-x: auto;
+    overflow-y: hidden;
   }
   .tabs a {
     display: inline-flex;
     align-items: center;
+    gap: 6px;
     height: 42px;
     padding: 0 10px;
     color: var(--soft);
-    font-size: 13px;
     font-weight: 500;
     white-space: nowrap;
     border-bottom: 2px solid transparent;
+  }
+  /* The first tab's words start where the page's do. */
+  .tabs a:first-child {
+    margin-left: -10px;
   }
   .tabs a:hover {
     text-decoration: none;
@@ -615,47 +593,22 @@
     color: var(--ink);
     border-color: var(--accent);
   }
-  .count {
-    display: inline-grid;
-    place-items: center;
-    min-width: 18px;
-    height: 18px;
-    margin-left: 6px;
-    padding: 0 5px;
-    border-radius: 999px;
-    background: var(--hover);
-    color: var(--soft);
-    font-size: 11px;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-  }
   .only {
     margin-left: auto;
   }
   main {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 24px;
-  }
-  .closed {
-    padding: 24px;
-    max-width: 560px;
-  }
-  .closed h1 {
-    font-size: 16px;
-  }
-  .closed p {
-    margin: 6px 0 0;
-    font-size: 13px;
+    padding-block: 24px;
   }
   @media (max-width: 760px) {
     .top {
-      padding: 6px 12px;
-      gap: 8px;
-      flex-wrap: nowrap;
       position: sticky;
       top: 0;
       z-index: 20;
+    }
+    .top .bar {
+      gap: 8px;
+      flex-wrap: nowrap;
+      padding-block: 6px;
     }
     .logo {
       font-size: 0;
@@ -664,20 +617,16 @@
     .host {
       display: none;
     }
-    .crumb {
-      min-width: 0;
-    }
-    select {
+    .top select {
       max-width: 46vw;
-      height: 32px;
+      height: var(--control);
     }
     .needs {
       white-space: nowrap;
-      height: 32px;
+      height: var(--control);
     }
     .menu {
       display: inline-grid;
-      place-items: center;
       flex: none;
     }
     .more {
@@ -692,27 +641,21 @@
       top: 100%;
       left: 0;
       right: 0;
-      padding: 10px 12px 14px;
+      padding: 10px 16px 14px;
       background: var(--chrome);
-      border-top: 1px solid rgba(255, 255, 255, 0.1);
-      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
+      border-top: 1px solid var(--chrome-line);
+      box-shadow: var(--menu-shadow);
     }
     .more.open .find input {
       width: 100%;
       height: 40px;
-      padding: 0 12px;
-      font-size: 16px;
       margin-bottom: 6px;
     }
-    .more.open .link {
+    .more.open .link,
+    .more.open .drop a,
+    .more.open .drop .out {
       height: 40px;
-      font-size: 15px;
-    }
-    .more.open .out {
-      height: 40px;
-      padding: 0 10px;
-      font-size: 15px;
-      text-align: left;
+      color: inherit;
     }
     .more.open .toggle,
     .more.open .who {
@@ -727,26 +670,18 @@
       padding: 0;
       color: inherit;
     }
-    .more.open .drop > span {
-      border-color: rgba(255, 255, 255, 0.1);
-    }
-    .more.open .drop a,
-    .more.open .drop .out {
-      height: 40px;
-      color: inherit;
-      font-size: 15px;
+    .more.open .signed {
+      border-color: var(--chrome-line);
+      color: var(--chrome-soft);
     }
     .more.open .drop a:hover,
     .more.open .drop .out:hover {
-      background: rgba(255, 255, 255, 0.06);
+      background: var(--chrome-fill);
     }
   }
   @media (max-width: 640px) {
-    .tabs {
-      padding: 0 8px;
-    }
     main {
-      padding: 16px;
+      padding-block: 16px;
     }
   }
 </style>

@@ -1,12 +1,16 @@
 <script>
   // What a lane did to one file: its functions, its lines, and what was
   // said on them.
+  import { untrack } from 'svelte';
   import { focus, whyLink } from './api.js';
   import { markViewed, viewedAs } from './review.js';
+  import Confirm from './Confirm.svelte';
+  import Icon from './Icon.svelte';
   import Thread from './Thread.svelte';
+  import { toast } from './toast.svelte.js';
 
   // `drafts`: the comments of the review being written, on this file;
-  // `draft`, `undraft`: add one, take one out (Kito 0.38).
+  // `draft`, `undraft`: add one, remove one (Kito 0.38).
   let { lane, file, threads, changed, drafts = [], draft = null, undraft = null, mayWrite = true } = $props();
 
   // The line a comment is being written on (its number in the lane's text).
@@ -14,10 +18,10 @@
   let text = $state('');
   // Lines suggested in the place of the one commented on; null: none.
   let suggestion = $state(null);
-  let failed = $state('');
 
-  // Viewed: folded, until the lane changes the file again.
-  let viewed = $state(viewedAs(lane, file.path) === (file.after ?? file.before ?? ''));
+  // Viewed: folded, until the lane changes the file again. Asked once,
+  // of the file as it is when it is first shown.
+  let viewed = $state(untrack(() => viewedAs(lane, file.path) === (file.after ?? file.before ?? '')));
   function setViewed(on) {
     viewed = on;
     markViewed(lane, file.path, on ? (file.after ?? file.before ?? '') : null);
@@ -47,159 +51,156 @@
   let above = $derived(threads.filter((thread) => !inline.includes(thread)));
   const on = (line) => inline.filter((thread) => thread.comment.lines[1] === line);
 
+  function write(line) {
+    writing = line;
+    text = '';
+    suggestion = null;
+  }
+  // A comment says something, or suggests lines.
+  let ready = $derived(text.trim() !== '' || suggestion !== null);
   function keep() {
-    if (text.trim().length < 2 && suggestion === null) {
-      failed = 'Say a few words, or suggest lines.';
-      return;
-    }
     draft?.({ on: `${file.path}:${writing}`, path: file.path, line: writing, text: text.trim(), suggestion });
     text = '';
     suggestion = null;
     writing = null;
-    failed = '';
+    toast('Comment added to your review');
+  }
+  function remove(id) {
+    undraft?.(id);
+    toast('Draft removed');
   }
   const draftsOn = (line) => drafts.filter((one) => one.line === line);
   // The text of a line of the lane, to start a suggestion from.
   const lineText = (line) => hunks.flatMap((hunk) => hunk.rows).find((row) => row.now === line)?.text ?? '';
 
-  const where = (symbol) => {
-    if (!symbol.lines) return '';
-    return symbol.lines[0] === symbol.lines[1] ? `line ${symbol.lines[0]}` : `lines ${symbol.lines[0]}–${symbol.lines[1]}`;
-  };
+  const where = (symbol) => (symbol.lines[0] === symbol.lines[1] ? `line ${symbol.lines[0]}` : `lines ${symbol.lines[0]}–${symbol.lines[1]}`);
   const name = (symbol) => symbol.symbol.slice(symbol.symbol.lastIndexOf(':') + 1);
 </script>
 
 <section class="panel file" id={`file-${file.path}`}>
-  <header>
-    <span class={`chip ${file.change === 'removed' ? 'bad' : file.change === 'added' ? 'ok' : ''}`}>{file.change}</span>
-    <h2 class="mono">
-      {#if file.change === 'removed'}{file.path}{:else}<a href={whyLink(file.path, lane)} title="Why it is the way it is">{file.path}</a>{/if}
-    </h2>
-    {#if file.was}<span class="soft">was <span class="mono">{file.was}</span></span>{/if}
+  <div class="panel-head">
+    <h3 class="mono">
+      {#if file.change === 'removed'}{file.path}{:else}<a href={whyLink(file.path, lane)}>{file.path}</a>{/if}
+    </h3>
+    {#if file.change !== 'changed'}<span class="tag">{file.change}</span>{/if}
+    {#if file.was}<span class="small soft">was <span class="mono">{file.was}</span></span>{/if}
     <span class="grow"></span>
     {#if file.binary}
-      <span class="soft">binary</span>
+      <span class="tag">binary</span>
     {:else}
       <span class="plus">+{file.added}</span>
       <span class="minus">−{file.removed}</span>
     {/if}
-    <label class="check viewed" title="Fold it until the lane changes it again">
+    <label class="check">
       <input type="checkbox" checked={viewed} onchange={(event) => setViewed(event.currentTarget.checked)} /> Viewed
     </label>
-  </header>
+  </div>
 
   {#if !viewed}
-
-  {#if file.symbols?.length > 0}
-    <ul class="symbols">
-      {#each file.symbols as symbol (symbol.symbol)}
-        <li>
-          <span class="change">{symbol.change}</span>
-          {#if symbol.change === 'removed'}
-            <span class="mono">{name(symbol)}</span>
-          {:else}
-            <a class="mono" href={whyLink(symbol.symbol, lane)} title="Why it is the way it is">{name(symbol)}</a>
-          {/if}
-          <span class="faint">{where(symbol)}</span>
-          {#if symbol.was}<span class="soft">was <span class="mono">{symbol.was}</span></span>{/if}
-          {#each symbol.intents ?? [] as intent}
-            <span class="intent">“{intent}”</span>
-          {/each}
-        </li>
-      {/each}
-    </ul>
-  {/if}
-
-  {#if above.length > 0}
-    <div class="above">
-      {#each above as thread (thread.comment.id)}
-        <p class="about soft">On <span class="mono">{thread.comment.on}</span></p>
-        <Thread {lane} comment={thread.comment} answers={thread.answers} {changed} />
-      {/each}
-    </div>
-  {/if}
-
-  {#if hunks.length > 0}
-    <div class="lines" role="table" aria-label={`Changes to ${file.path}`}>
-      {#each hunks as hunk}
-        <div class="hunk mono">{hunk.head}</div>
-        {#each hunk.rows as row}
-          <div class={`row ${row.mark === '+' ? 'added' : row.mark === '-' ? 'removed' : ''}`} role="row">
-            <span class="number">{row.old ?? ''}</span>
-            <span class="number">{row.now ?? ''}</span>
-            <span class="say">
-              {#if row.now !== null && mayWrite && draft}
-                <button
-                  class="bare add"
-                  title={`Comment on line ${row.now}`}
-                  aria-label={`Comment on line ${row.now} of ${file.path}`}
-                  onclick={() => {
-                    writing = row.now;
-                    text = '';
-                    suggestion = null;
-                    failed = '';
-                  }}>+</button
-                >
-              {/if}
-            </span>
-            <span class="mark">{row.mark === ' ' ? '' : row.mark === '-' ? '−' : '+'}</span>
-            <span class="code">{row.text}</span>
-          </div>
-          {#if row.now !== null}
-            {#each on(row.now) as thread (thread.comment.id)}
-              <div class="between">
-                <Thread {lane} comment={thread.comment} answers={thread.answers} {changed} />
-              </div>
-            {/each}
-            {#each draftsOn(row.now) as one (one.id)}
-              <div class="between">
-                <div class="draft">
-                  <p class="head"><span class="chip">waiting</span> <span class="faint">sent with your review</span></p>
-                  {#if one.text}<p class="text">{one.text}</p>{/if}
-                  {#if one.suggestion !== null && one.suggestion !== undefined}
-                    <pre class="suggested">{one.suggestion}</pre>
-                  {/if}
-                  <button class="quiet sm" onclick={() => undraft?.(one.id)}>Take it out</button>
-                </div>
-              </div>
-            {/each}
-            {#if writing === row.now}
-              <form
-                class="between"
-                onsubmit={(event) => {
-                  event.preventDefault();
-                  keep();
-                }}
-              >
-                <textarea
-                  bind:value={text}
-                  placeholder={`What is there to say about line ${row.now}? It is sent with your review, and its agent told.`}
-                  aria-label={`Comment on line ${row.now}`}
-                  use:focus
-                ></textarea>
-                {#if suggestion !== null}
-                  <p class="soft small">In the place of line {row.now}:</p>
-                  <textarea class="mono code-edit" bind:value={suggestion} aria-label="Suggested lines" spellcheck="false"></textarea>
-                {/if}
-                <div class="actions">
-                  <button class="primary sm">Add to review</button>
-                  {#if suggestion === null}
-                    <button class="sm" type="button" onclick={() => (suggestion = lineText(row.now))}>Suggest a change</button>
-                  {:else}
-                    <button type="button" class="quiet sm" onclick={() => (suggestion = null)}>No suggestion</button>
-                  {/if}
-                  <button type="button" class="quiet sm" onclick={() => (writing = null)}>Cancel</button>
-                </div>
-                {#if failed}<p class="error">{failed}</p>{/if}
-              </form>
+    {#if file.symbols?.length > 0}
+      <ul class="symbols">
+        {#each file.symbols as symbol (symbol.symbol)}
+          <li>
+            <span class="tag change">{symbol.change}</span>
+            {#if symbol.change === 'removed'}
+              <span class="ref">{name(symbol)}</span>
+            {:else}
+              <a class="ref" href={whyLink(symbol.symbol, lane)}>{name(symbol)}</a>
             {/if}
-          {/if}
+            {#if symbol.lines}<span class="small faint">{where(symbol)}</span>{/if}
+            {#if symbol.was}<span class="small soft">was <span class="mono">{symbol.was}</span></span>{/if}
+            {#each symbol.intents ?? [] as intent}
+              <q class="reason">{intent}</q>
+            {/each}
+          </li>
         {/each}
-      {/each}
-    </div>
-  {:else if !file.binary && file.change === 'renamed'}
-    <p class="note soft">Renamed, with what is in it unchanged.</p>
-  {/if}
+      </ul>
+    {/if}
+
+    {#if above.length > 0}
+      <div class="above">
+        {#each above as thread (thread.comment.id)}
+          <p class="small soft">On <span class="mono">{thread.comment.on}</span></p>
+          <Thread {lane} comment={thread.comment} answers={thread.answers} {changed} {mayWrite} />
+        {/each}
+      </div>
+    {/if}
+
+    {#if hunks.length > 0}
+      <div class="lines" role="table" aria-label={`Changes to ${file.path}`}>
+        {#each hunks as hunk}
+          <div class="hunk faint">{hunk.head}</div>
+          {#each hunk.rows as row}
+            <div class={['line', row.mark === '+' && 'added', row.mark === '-' && 'removed']} role="row">
+              <span class="number faint">{row.old ?? ''}</span>
+              <span class="number faint">{row.now ?? ''}</span>
+              <span class="say">
+                {#if row.now !== null && mayWrite && draft}
+                  <button class="bare add" aria-label={`Comment on line ${row.now}`} onclick={() => write(row.now)}>
+                    <Icon name="plus" size={14} />
+                  </button>
+                {/if}
+              </span>
+              <span class="mark">{row.mark === ' ' ? '' : row.mark === '-' ? '−' : '+'}</span>
+              <span class="text">{row.text}</span>
+            </div>
+            {#if row.now !== null}
+              {#each on(row.now) as thread (thread.comment.id)}
+                <div class="between">
+                  <Thread {lane} comment={thread.comment} answers={thread.answers} {changed} {mayWrite} />
+                </div>
+              {/each}
+              {#each draftsOn(row.now) as one (one.id)}
+                <div class="between">
+                  <div class="panel pad draft">
+                    <p><span class="tag">draft</span> <span class="small faint">sent with your review</span></p>
+                    {#if one.text}<p class="said">{one.text}</p>{/if}
+                    {#if one.suggestion !== null && one.suggestion !== undefined}
+                      <pre class="suggested">{one.suggestion}</pre>
+                    {/if}
+                    <div class="controls flush">
+                      <Confirm label="Remove" ask="Remove this draft? What you wrote in it is lost." onyes={() => remove(one.id)} sm />
+                    </div>
+                  </div>
+                </div>
+              {/each}
+              {#if writing === row.now}
+                <form
+                  class="between writing"
+                  onsubmit={(event) => {
+                    event.preventDefault();
+                    keep();
+                  }}
+                >
+                  <label class="field">
+                    <span>Comment on line {row.now}</span>
+                    <textarea bind:value={text} use:focus></textarea>
+                    <span class="hint">It is sent with your review, and the lane’s agent is told then.</span>
+                  </label>
+                  {#if suggestion !== null}
+                    <label class="field">
+                      <span>In the place of line {row.now}</span>
+                      <textarea class="mono" bind:value={suggestion} wrap="off" spellcheck="false"></textarea>
+                    </label>
+                  {/if}
+                  <div class="controls">
+                    <button class="primary sm" disabled={!ready}>Comment</button>
+                    {#if suggestion === null}
+                      <button class="sm" type="button" onclick={() => (suggestion = lineText(row.now))}>Suggest a change</button>
+                    {:else}
+                      <button class="sm" type="button" onclick={() => (suggestion = null)}>No suggestion</button>
+                    {/if}
+                    <button class="quiet sm" type="button" onclick={() => (writing = null)}>Cancel</button>
+                  </div>
+                </form>
+              {/if}
+            {/if}
+          {/each}
+        {/each}
+      </div>
+    {:else if !file.binary && file.change === 'renamed'}
+      <p class="pad soft">Renamed, with what is in it unchanged.</p>
+    {/if}
   {/if}
 </section>
 
@@ -207,191 +208,125 @@
   .file {
     overflow: hidden;
   }
-  header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-height: 44px;
-    padding: 8px 16px;
-    border-bottom: 1px solid var(--line);
-    flex-wrap: wrap;
-  }
-  h2 {
-    font-size: 13px;
-    font-weight: 600;
-    overflow-wrap: anywhere;
-  }
-  h2 a {
-    color: inherit;
-  }
-  .grow {
-    flex: 1;
-  }
-  .plus {
-    color: var(--added-ink);
-    font-family: var(--mono);
-    font-size: 13px;
-  }
-  .minus {
-    color: var(--removed-ink);
-    font-family: var(--mono);
-    font-size: 13px;
-  }
   .symbols {
-    list-style: none;
-    margin: 0;
-    padding: 8px 14px;
-    border-bottom: 1px solid var(--line);
     display: grid;
     gap: 2px;
-    font-size: 13px;
+    margin: 0;
+    padding: 8px var(--pad-panel);
+    border-bottom: 1px solid var(--line);
+    list-style: none;
   }
   .symbols li {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 2px 8px;
     align-items: baseline;
+    overflow-wrap: anywhere;
   }
   .change {
-    min-width: 62px;
-    color: var(--soft);
-  }
-  .intent {
-    color: var(--soft);
-    font-style: italic;
+    min-width: 60px;
   }
   .above {
-    padding: 10px 14px;
-    border-bottom: 1px solid var(--line);
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 6px;
+    padding: 12px var(--pad-panel);
+    border-bottom: 1px solid var(--line);
   }
-  .about {
-    margin: 4px 0 0;
-    font-size: 13px;
-  }
+  /* The lines: each as tall as the button that comments on it. */
   .lines {
-    font: 13px/1.55 var(--mono);
+    font: 12px/20px var(--mono);
     overflow-x: auto;
   }
   .hunk {
-    padding: 2px 14px;
+    padding: 2px var(--pad-panel);
     background: var(--bg);
-    color: var(--faint);
-    font-size: 12px;
   }
-  .row {
+  .line {
     display: grid;
-    grid-template-columns: 44px 44px 22px 16px 1fr;
+    grid-template-columns: 44px 44px 24px 16px 1fr;
     white-space: pre;
     min-width: max-content;
   }
-  .row.added {
+  .line.added {
     background: var(--added);
   }
-  .row.removed {
+  .line.removed {
     background: var(--removed);
   }
   .number {
-    text-align: right;
     padding-right: 8px;
-    color: var(--faint);
+    text-align: right;
     user-select: none;
+  }
+  .say {
+    display: grid;
+    place-items: center;
   }
   .mark {
-    user-select: none;
     color: var(--soft);
+    user-select: none;
   }
-  .row.added .mark {
+  .added .mark {
     color: var(--added-ink);
   }
-  .row.removed .mark {
+  .removed .mark {
     color: var(--removed-ink);
   }
-  .code {
-    padding-right: 14px;
+  .text {
+    padding-right: var(--pad-panel);
   }
+  /* Shown on the line the pointer is on, and to whoever comes by keyboard. */
   .add {
-    display: inline-grid;
+    display: grid;
     place-items: center;
-    width: 18px;
-    height: 18px;
-    padding: 0;
-    line-height: 1;
-    font-size: 13px;
-    border: 1px solid var(--accent);
-    border-radius: 4px;
-    cursor: pointer;
+    width: 20px;
+    height: 20px;
+    border-radius: var(--radius);
     background: var(--accent);
-    border-color: var(--accent);
     color: var(--accent-ink);
+    cursor: pointer;
     opacity: 0;
   }
-  .row:hover .add,
+  .line:hover .add,
   .add:focus-visible {
     opacity: 1;
   }
+  /* Where nothing points before it presses: always there, and quiet. */
+  @media (hover: none) {
+    .add {
+      background: none;
+      color: var(--faint);
+      opacity: 1;
+    }
+  }
+  /* What is said between two lines starts under the code, in the words' own type. */
   .between {
-    padding: 8px 14px 8px 110px;
-    background: var(--bg);
+    padding: 8px var(--pad-panel) 8px 112px;
     border-block: 1px solid var(--line);
+    background: var(--bg);
+    font: 13px/1.5 var(--sans);
     white-space: normal;
-    font-family: var(--sans);
   }
-  .actions {
-    display: flex;
-    gap: 6px;
-    margin-top: 8px;
-  }
-  .viewed {
-    gap: 6px;
-    font-size: 12.5px;
-    color: var(--soft);
+  .writing,
+  .draft {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
   }
   .draft {
-    border: 1px dashed var(--accent);
-    border-radius: 8px;
-    background: var(--panel);
-    padding: 8px 12px;
-    font-size: 13px;
+    border-style: dashed;
+    border-color: var(--line-strong);
   }
-  .draft .head {
-    margin: 0;
-    display: flex;
-    gap: 8px;
-    align-items: baseline;
-    font-size: 12px;
-  }
-  .draft .text {
-    margin: 4px 0;
-    white-space: pre-wrap;
-  }
-  .suggested,
-  .code-edit {
-    margin: 4px 0;
-    padding: 6px 10px;
-    border-radius: 6px;
+  .suggested {
     background: var(--added);
-    font: 12px/1.5 var(--mono);
-    white-space: pre;
-    overflow-x: auto;
   }
-  .code-edit {
-    width: 100%;
-    min-height: 60px;
-    border: 1px solid var(--line-strong);
-    color: var(--ink);
-  }
-  .small {
-    margin: 6px 0 0;
-    font-size: 12px;
-  }
-  .note {
-    margin: 0;
-    padding: 10px 14px;
-    font-size: 13px;
-  }
-  .error {
-    margin: 8px 0 0;
+  @media (max-width: 640px) {
+    .line {
+      grid-template-columns: 36px 36px 24px 14px 1fr;
+    }
+    .between {
+      padding-left: var(--pad-panel);
+    }
   }
 </style>

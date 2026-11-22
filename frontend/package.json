@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build"
+    "lint": "node scripts/lint-ui.mjs",
+    "build": "node scripts/lint-ui.mjs && vite build"
   },
   "devDependencies": {
     "@fontsource-variable/geist": "^5.3.0",

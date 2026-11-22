@@ -1,22 +1,30 @@
 <script>
   // A lane, read the way a change is reviewed: what was said, what it
   // changes, what stands in its way, and why the code it touches is the
-  // way it is. Beside them: where it stands, and who is at work.
-  import { ago, ask, laneLink, watch } from './api.js';
+  // way it is. Beside them: who reviewed it, its scope, who else is on
+  // its code. Under them: the review being written, and integrating.
+  import { untrack } from 'svelte';
+  import { ask, laneLink, watch } from './api.js';
+  import { assistantOf } from './assistants.js';
   import { checksOf, stopping } from './checks.js';
-  import { sameCode } from './standing.js';
+  import { count, laneName, laneTitle, tasked, who } from './format.js';
+  import { loadDrafts, saveDrafts } from './review.js';
+  import { verdictStanding } from './standing.js';
+  import { toast } from './toast.svelte.js';
   import Assistant from './Assistant.svelte';
-  import Face from './Face.svelte';
+  import Confirm from './Confirm.svelte';
+  import Empty from './Empty.svelte';
+  import Err from './Err.svelte';
   import FileDiff from './FileDiff.svelte';
   import Integrate from './Integrate.svelte';
   import LaneChecks from './LaneChecks.svelte';
   import LaneTalk from './LaneTalk.svelte';
   import LaneWhy from './LaneWhy.svelte';
+  import Loading from './Loading.svelte';
+  import PageHead from './PageHead.svelte';
   import ReviewBar from './ReviewBar.svelte';
   import State from './State.svelte';
-  import Empty from './Empty.svelte';
-  import Loading from './Loading.svelte';
-  import { loadDrafts, saveDrafts } from './review.js';
+  import Time from './Time.svelte';
 
   // `tab`: which part is read; `at`: the file to go to in the changes.
   // `user`, `role`: who is signed in behind a server, and what they may do.
@@ -35,8 +43,15 @@
   // A lane that is closed: what is still known of it.
   let closed = $state(null);
 
+  // Behind a server, somebody who may only read changes nothing here.
+  let mayWrite = $derived(role !== 'read');
+  // Integrating is for those the repository says may, and for anybody on
+  // their own machine. Asked by somebody else, the lane is merged and
+  // checked, then waits for one of them.
+  let mayIntegrate = $derived(!role || role === 'integrate' || role === 'maintain');
+
   // The review being written: its comments wait here until it is sent.
-  let drafts = $state(loadDrafts(lane));
+  let drafts = $state(untrack(() => loadDrafts(lane)));
   $effect(() => saveDrafts(lane, drafts));
   const draft = (one) => (drafts = [...drafts, { ...one, id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}` }]);
   const undraft = (id) => (drafts = drafts.filter((one) => one.id !== id));
@@ -61,7 +76,7 @@
     else since = null;
   });
 
-  // Integrating from the review bar is the panel's integrating.
+  // Integrating is asked for in the review bar, and answered under the head.
   let integrator = $state(null);
   let integrating = $state(false);
   async function integrate() {
@@ -70,6 +85,18 @@
       await integrator?.integrate();
     } finally {
       integrating = false;
+    }
+  }
+
+  let closeFailed = $state('');
+  async function closeLane() {
+    closeFailed = '';
+    try {
+      await ask('close_lane', { lane });
+      toast(`${nameOf(info)} closed`);
+      location.hash = '#/';
+    } catch (error) {
+      closeFailed = error.message;
     }
   }
 
@@ -97,20 +124,22 @@
   async function gone() {
     try {
       const all = await ask('lanes', { all: true });
-      const id = lane.startsWith('lane/') || isNaN(lane) ? lane : `lane/${lane}`;
+      const id = laneName(lane);
       closed = all.find((one) => one.state === 'closed' && (one.id === id || one.name === lane)) ?? null;
     } catch {
       // What was said first stands.
     }
   }
 
+  // Asked again when the resolved comments are wanted too, or no longer.
+  // What is there stays meanwhile: an answer may be being written in it.
   $effect(() => {
     resolved;
     load();
   });
 
   $effect(() => {
-    // Told when something happens to this lane, or lands under it.
+    // Told when something happens to this lane, or is integrated under it.
     let pending = null;
     const stop = watch((events) => {
       const id = info?.id;
@@ -170,7 +199,7 @@
   let stops = $derived(stopping(rows));
   // The other lanes on the very same code, each said once: by the
   // function both are on rather than by one that calls it.
-  let close = $derived.by(() => {
+  let beside = $derived.by(() => {
     const found = new Map();
     for (const one of seen?.overlaps ?? []) {
       if (!['function', 'caller'].includes(one.kind)) continue;
@@ -179,7 +208,6 @@
     return [...found.values()];
   });
 
-  const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
   const here = (name) => `${laneLink(lane)}${name === 'conversation' ? '' : `?tab=${name}`}`;
   let parts = $derived([
     ['conversation', 'Conversation', threads.length],
@@ -195,90 +223,119 @@
     queueMicrotask(() => document.getElementById(`file-${at}`)?.scrollIntoView({ block: 'start' }));
   });
 
-  const who = (verdict) => (verdict.for ? `${verdict.by}, of ${verdict.for}` : verdict.by);
   // Whether who is signed in gave a verdict: then they may see what changed since.
   let reviewed = $derived(Boolean(review?.verdicts.some((verdict) => user === null || verdict.by === user)));
   let shownFiles = $derived(sinceMine && since ? since.files : (diff?.files ?? []));
+
+  // A lane as it is written, and as its page is headed: by its task, or
+  // by what it is for. A task of the repository is linked beside it instead.
+  const back = { href: '#/', label: 'Lanes' };
+  const nameOf = (it) => laneName(it.name ?? it.id);
+  const titleOf = (it) => laneTitle(it) ?? nameOf(it);
 </script>
 
+<!-- A lane that is named: the main one has no page of its own. -->
+{#snippet named(id)}
+  {#if id === 'main'}<span class="ref">main</span>{:else}<a class="ref" href={laneLink(id)}>{laneName(id)}</a>{/if}
+{/snippet}
+
+<!-- What is said of a lane under its title, open or closed: its name (unless
+     that is the title), the task it is for, who works in it and in what. -->
+{#snippet whose(it)}
+  {#if titleOf(it) !== nameOf(it)}
+    <span class="ref">{nameOf(it)}</span>{#if tasked(it)}{' '}for {@render task(it)}{/if} ·
+  {:else if tasked(it)}
+    For {@render task(it)} ·
+  {/if}
+  <Assistant assistant={it.assistant} />
+  {who(it.agent, it.owner)}
+  {#if it.assistant?.model}· <span class="mono">{it.assistant.model}</span>{/if}
+{/snippet}
+
+{#snippet task(it)}<a class="ref" href={`#/tasks?task=${encodeURIComponent(it.task)}`}>{it.task}</a>{/snippet}
+
+{#snippet closing()}
+  <Confirm
+    label="Close the lane"
+    ask={`Close ${nameOf(info)}? Its last changes are recorded and its working copy is removed; what was not integrated stays in its history.`}
+    onyes={closeLane}
+    disabled={integrating}
+    working="Closing…"
+  />
+{/snippet}
+
 {#if info === null && closed}
-  <div class="head">
-    <h1>{closed.task ?? closed.intent ?? 'no intent said'}</h1>
-    <State lane={closed} />
-  </div>
-  <p class="sub soft">
-    <span class="mono">{closed.id}</span>
-    · {closed.agent}{#if closed.owner && closed.owner !== closed.agent}&nbsp;for {closed.owner}{/if}
-    {#if closed.assistant?.name}· <Assistant assistant={closed.assistant} words />{/if}
-  </p>
-  <div class="panel gone">
-    <p>This lane is closed: its working copy is gone, and nothing more is said in it.</p>
-    <p class="soft">
-      What it brought in is in <a href="#/log">the log</a> of the main lane, under its reason; why the code it touched is
-      the way it is now is in <a href="#/why">code and why</a>.
+  <PageHead title={titleOf(closed)} name={nameOf(closed)} {back}>
+    {#snippet after()}<State lane={closed} />{/snippet}
+    {#snippet lead()}{@render whose(closed)}{/snippet}
+  </PageHead>
+  <Empty title="This lane is closed">
+    <p>
+      Its working copy is gone, and nothing more is said in it. What was integrated from it is in the
+      <a href="#/log">Log</a> of the main lane, under its reason; why the code it touched is the way it is now is in
+      <a href="#/why">Code and why</a>.
     </p>
     {#if closed.scope?.length > 0}
-      <p class="soft">Declared: <span class="mono">{closed.scope.join(', ')}</span></p>
+      <p>Its scope: <span class="mono">{closed.scope.join(', ')}</span></p>
     {/if}
-  </div>
-{:else if failed && info === null}
-  <p class="error">{failed}</p>
+  </Empty>
 {:else if info === null}
-  <Loading lines={4} />
+  <PageHead title={laneName(lane)} {back} />
+  {#if failed}
+    <Err message={failed} />
+  {:else}
+    <Loading lines={4} />
+  {/if}
 {:else}
-  <div class="head">
-    <h1>{info.task?.startsWith('task#') ? (info.intent ?? info.task) : (info.task ?? info.intent ?? 'no intent said')}</h1>
-    {#if info.task?.startsWith('task#')}<p class="faint">For <a href={`#/tasks?task=${encodeURIComponent(info.task)}`}>{info.task}</a></p>{/if}
-    <State lane={info} />
-  </div>
-  <p class="sub soft">
-    <span class="mono">{info.name ?? info.id}</span>
-    · <b>{info.agent}</b>{#if info.owner && info.owner !== info.agent}&nbsp;for <b>{info.owner}</b>{/if}
-    wants to bring {count(diff.files.length, 'file', 'files')} into <span class="mono">{diff.onto}</span>
-    {#if diff.behind > 0}· {diff.behind} behind{/if}
-  </p>
+  <PageHead title={titleOf(info)} name={nameOf(info)} {back} actions={mayWrite && !info.name ? closing : null}>
+    {#snippet after()}<State lane={info} />{/snippet}
+    {#snippet lead()}
+      {@render whose(info)}
+      · {count(diff.files.length, 'file')} into {@render named(diff.onto)}
+      {#if seen?.last_change_ms}· changed <Time ms={seen.last_change_ms} />{/if}
+    {/snippet}
+  </PageHead>
+  <Err message={closeFailed} />
+  {#if mayWrite}
+    <Integrate bind:this={integrator} {lane} {info} changed={load} talk={here('conversation')} />
+  {/if}
+  <Err message={failed} />
 
-  <nav class="parts" aria-label="Parts of the lane">
+  <nav class="subtabs" aria-label="Parts of the lane">
     {#each parts as [name, label, n] (name)}
       <a href={here(name)} aria-current={part === name ? 'page' : undefined}>
-        {label}{#if n > 0}<span class="count" class:bad={name === 'checks'}>{n}</span>{/if}
+        {label}{#if n > 0}<span class={['count', name === 'checks' && 'bad']}>{n}</span>{/if}
       </a>
     {/each}
   </nav>
 
-  {#if failed}<p class="error">{failed}</p>{/if}
-
-  <div class="columns">
-    <div class="main">
+  <div class="cols">
+    <div class="stack">
       {#if part === 'conversation'}
         <LaneTalk
           {lane}
           {info}
+          title={titleOf(info)}
           {seen}
           {threads}
           verdicts={review.verdicts}
           {conflicts}
           target={diff.onto}
-          {role}
-          {user}
           bind:resolved
           changed={load}
+          {mayWrite}
         />
       {:else if part === 'changes'}
-        {#if diff.behind > 0}
-          <p class="notice">
-            {diff.onto} changed {count(diff.behind, 'file', 'files')} since this lane started: it has not seen
-            {diff.behind === 1 ? 'it' : 'them'}.
-          </p>
-        {/if}
-        {#if info.out_of_scope?.length > 0}
-          <p class="notice">Changed outside what it declared: <span class="mono">{info.out_of_scope.join(', ')}</span></p>
-        {/if}
-        <div class="summary-row">
-          <p class="summary soft">
-            {count(diff.files.length, 'file', 'files')} changed,
-            <span class="plus">+{totals.added}</span> <span class="minus">−{totals.removed}</span>
-            · from {diff.base}
+        <div class="summary">
+          <p class="soft">
+            {#if !sinceMine}
+              <span class="plus">+{totals.added}</span> <span class="minus">−{totals.removed}</span>
+              against <span class="ref">{diff.base}</span>
+            {:else if since?.verdict}
+              Since your verdict (<span class="mono">{since.verdict}</span>, <Time ms={since.at_ms} />), against what you saw then
+            {:else}
+              Since your verdict
+            {/if}
           </p>
           {#if reviewed}
             <div class="seg" role="group" aria-label="Which changes">
@@ -287,28 +344,30 @@
             </div>
           {/if}
         </div>
-        {#if sinceMine && since?.error}
-          <p class="error">{since.error}</p>
-        {:else if sinceMine && since && since.files.length === 0}
-          <Empty title="Nothing changed since your review." />
-        {:else if sinceMine && since}
-          <p class="soft small">What changed since your verdict ({since.verdict}), against what you saw then.</p>
+        {#if sinceMine && since === null}
+          <Loading />
+        {:else if sinceMine && since.error}
+          <Err message={since.error} />
+        {:else if shownFiles.length === 0}
+          {#if sinceMine}
+            <Empty title="Nothing changed since your review" />
+          {:else}
+            <Empty title="No changes yet">What is saved in the lane’s working copy shows here.</Empty>
+          {/if}
+        {:else}
+          {#each shownFiles as file (`${sinceMine}-${file.path}`)}
+            <FileDiff
+              {lane}
+              {file}
+              threads={inFile(file.path)}
+              changed={load}
+              drafts={drafts.filter((one) => one.path === file.path)}
+              draft={mayWrite ? draft : null}
+              {undraft}
+              {mayWrite}
+            />
+          {/each}
         {/if}
-        {#if !sinceMine && diff.files.length === 0}
-          <Empty title="This lane has changed nothing yet." />
-        {/if}
-        {#each shownFiles as file (`${sinceMine}-${file.path}`)}
-          <FileDiff
-            {lane}
-            {file}
-            threads={inFile(file.path)}
-            changed={load}
-            drafts={drafts.filter((one) => one.path === file.path)}
-            draft={role !== 'read' ? draft : null}
-            {undraft}
-            mayWrite={role !== 'read'}
-          />
-        {/each}
       {:else if part === 'checks'}
         <LaneChecks {rows} />
       {:else}
@@ -316,94 +375,67 @@
       {/if}
     </div>
 
-    <aside>
-      {#if role !== 'read'}
-        <Integrate bind:this={integrator} {lane} {info} changed={load} />
-      {/if}
-
-      <section class="panel box" aria-label="Review">
-        <h2>Review</h2>
-        {#if review.missing}
-          <p><span class="chip warn">{review.missing}</span></p>
-        {:else if review.approved_by.length > 0}
-          <p><span class="chip ok">approved by {review.approved_by.join(', ')}</span></p>
-        {:else}
-          <p class="soft small">No verdict yet{review.required === 0 ? ', and none is needed' : ''}.</p>
-        {/if}
-        {#if review.required > 0}
-          <p class="soft small">
-            {count(review.required, 'approval', 'approvals')} needed, from somebody other than the lane’s owner.
+    <aside class="stack side">
+      <section class="panel pad box">
+        <h3>Review</h3>
+        {#each review.verdicts as verdict (`${verdict.by} ${verdict.at_ms}`)}
+          <p>
+            {who(verdict.by, verdict.for)}
+            <State said={verdictStanding(verdict.verdict)} plain />
+            <span class="small faint">· <Time ms={verdict.at_ms} /></span>
           </p>
-        {/if}
-        {#each review.verdicts as verdict}
-          <p class="line small">
-            <Face name={verdict.by} agent={Boolean(verdict.for)} />
-            <span>{who(verdict)} <span class="soft">{verdict.verdict.replaceAll('_', ' ')}</span></span>
-          </p>
-        {/each}
-      </section>
-
-      <section class="panel box" aria-label="Checks">
-        <h2>Checks</h2>
-        {#each rows.filter((row) => row.tone && row.tone !== 'ok') as row (row.name)}
-          <p class="small"><span class={`chip ${row.tone}`}>{row.name}</span> <span class="soft">{row.text}</span></p>
         {:else}
-          <p class="soft small">Nothing stands in its way that can be seen before it asks to go in.</p>
+          <p class="none">None yet</p>
         {/each}
-        <p class="small"><a href={here('checks')}>All of them</a></p>
       </section>
 
-      <section class="panel box" aria-label="Declared">
-        <h2>Declared</h2>
-        {#each info.scope ?? [] as item}
-          <p class="mono item">{item}</p>
+      <section class="panel pad box">
+        <h3>Scope</h3>
+        {#if info.scope?.length > 0}
+          <ul class="scope">
+            {#each info.scope as item}<li class="mono">{item}</li>{/each}
+          </ul>
         {:else}
-          <p class="soft small">Nothing.</p>
-        {/each}
-        {#if seen?.broad}
-          <p class="soft small">Broad: it covers {count(seen.scope_files, 'file', 'files')}.</p>
+          <p class="none">None</p>
         {/if}
+        {#if seen?.broad}<p class="hint">Broad: it covers {count(seen.scope_files, 'file')}.</p>{/if}
       </section>
 
-      {#if close.length > 0}
-        <section class="panel box" aria-label="On the same code">
-          <h2>On the same code</h2>
-          {#each close as other}
-            <p class="small">
-              <a class="mono" href={laneLink(other.lane)}>{other.lane}</a>
-              ({other.agent}{#if other.owner}&nbsp;for {other.owner}{/if}): <span class="soft">{other.detail}</span>
+      {#if beside.length > 0}
+        <section class="panel pad box">
+          <h3>On the same code</h3>
+          {#each beside as other (other.lane)}
+            <p>
+              <a class="ref" href={laneLink(other.lane)}>{laneName(other.lane)}</a>
+              ({who(other.agent, other.owner)}): <span class="soft">{other.detail}</span>
             </p>
           {/each}
         </section>
       {/if}
 
-      <section class="panel box" aria-label="Agent">
-        <h2>Agent</h2>
-        <p class="line">
-          <Face name={info.agent} agent assistant={info.assistant} />
-          <span>
-            <b>{info.agent}</b>{#if info.owner && info.owner !== info.agent}<span class="soft">&nbsp;for {info.owner}</span>{/if}
-          </span>
-        </p>
+      <section class="panel pad box">
+        <h3>Agent</h3>
         {#if info.assistant?.name}
-          <p class="small"><Assistant assistant={info.assistant} words /></p>
-          {#if info.assistant.version}<p class="faint small">version {info.assistant.version}, as it said of itself</p>{/if}
+          <p>
+            Runs in {assistantOf(info.assistant).label}{info.assistant.version ? ` ${info.assistant.version}` : ''}, as it said of
+            itself.
+          </p>
         {:else}
-          <p class="faint small">Nothing says which assistant it runs in.</p>
+          <p class="soft">Nothing says which assistant it runs in.</p>
         {/if}
-        {#if seen?.last_change_ms}<p class="faint small">Last change {ago(seen.last_change_ms)}</p>{/if}
       </section>
     </aside>
   </div>
-  {#if role !== 'read'}
+
+  {#if mayWrite}
     <ReviewBar
       {lane}
+      {info}
       {drafts}
       {review}
       {stops}
       {user}
-      owner={info.owner ?? null}
-      mayIntegrate
+      {mayIntegrate}
       {integrating}
       {sent}
       {integrate}
@@ -413,140 +445,22 @@
 {/if}
 
 <style>
-  .head {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-  .head p {
-    margin: 0;
-    font-size: 13px;
-  }
-  h1 {
-    overflow-wrap: anywhere;
-  }
-  .sub {
-    margin: 4px 0 16px;
-    font-size: 13px;
-  }
-  .sub b {
-    color: var(--ink);
-    font-weight: 500;
-  }
-  .parts {
-    display: flex;
-    gap: 2px;
-    margin-bottom: 20px;
-    border-bottom: 1px solid var(--line);
-    overflow-x: auto;
-  }
-  .parts a {
-    display: inline-flex;
-    align-items: center;
-    height: 38px;
-    padding: 0 10px;
-    color: var(--soft);
-    font-size: 13px;
-    font-weight: 500;
-    white-space: nowrap;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -1px;
-  }
-  .parts a:hover {
-    text-decoration: none;
-    color: var(--ink);
-  }
-  .parts a[aria-current='page'] {
-    color: var(--ink);
-    border-color: var(--accent);
-  }
-  .count {
-    display: inline-grid;
-    place-items: center;
-    min-width: 18px;
-    height: 18px;
-    margin-left: 6px;
-    padding: 0 5px;
-    border-radius: 999px;
-    background: var(--hover);
-    color: var(--soft);
-    font-size: 11px;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-  }
-  .count.bad {
-    background: var(--bad-bg);
-    color: var(--bad);
-  }
-  .columns {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 300px;
-    gap: 24px;
-    align-items: start;
-  }
-  @media (max-width: 900px) {
-    .columns {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  }
-  .main {
-    display: grid;
-    gap: 16px;
-    min-width: 0;
-  }
-  aside {
-    display: grid;
-    gap: 12px;
-  }
-  .box {
-    padding: 14px 16px;
-    display: grid;
-    gap: 8px;
-  }
-  .box p {
-    margin: 0;
-    overflow-wrap: anywhere;
-  }
-  .small {
-    font-size: 13px;
-  }
-  .line {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  }
-  .item {
-    overflow-wrap: anywhere;
-  }
   .summary {
-    margin: 0;
-    font-size: 13px;
-  }
-  .summary-row {
     display: flex;
-    gap: 10px;
     align-items: center;
-    flex-wrap: wrap;
     justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
   }
-  .plus {
-    color: var(--added-ink);
-    font-family: var(--mono);
+  /* A path is broken where the column ends, not the column by a path. */
+  .side {
+    overflow-wrap: anywhere;
   }
-  .minus {
-    color: var(--removed-ink);
-    font-family: var(--mono);
-  }
-  .gone {
-    padding: 16px 20px;
-    max-width: 720px;
-    font-size: 13px;
-  }
-  .gone p {
-    margin: 0 0 6px;
-  }
-  .gone p:last-child {
+  .scope {
+    display: grid;
+    gap: 2px;
     margin: 0;
+    padding: 0;
+    list-style: none;
   }
 </style>

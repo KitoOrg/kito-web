@@ -3,30 +3,41 @@
   // maintainers and the server's admins (`repo`); or, with no repository,
   // everybody on the server, for its admins. The server decides who may
   // do what; this page only asks.
-  import { ago, ask, laneLink, people, ways } from './api.js';
+  import { ask, focus, laneLink, people, ways } from './api.js';
+  import { laneName } from './format.js';
+  import { toast } from './toast.svelte.js';
+  import Confirm from './Confirm.svelte';
+  import Empty from './Empty.svelte';
+  import Err from './Err.svelte';
+  import Icon from './Icon.svelte';
   import Loading from './Loading.svelte';
+  import PageHead from './PageHead.svelte';
+  import Time from './Time.svelte';
 
   let { repo = null, who } = $props();
 
   const repoRoles = ['read', 'write', 'integrate', 'maintain'];
   const serverRoles = ['member', 'admin', 'owner'];
+  // What each role may do: said under the table, and under the role chosen in the form.
   const means = {
-    read: 'sees lanes and follows them',
-    write: 'opens lanes and works in them; their integrations wait',
-    integrate: 'brings lanes into the main lane',
-    maintain: 'changes the rules, and says who uses it',
-    member: 'the repositories given them',
-    admin: 'every repository, the people, the plugins',
-    owner: 'as an admin, and names admins and owners',
+    read: 'Sees lanes and follows them.',
+    write: 'Opens lanes and works in them; their integrations wait for somebody who may integrate.',
+    integrate: 'Integrates lanes into the main lane.',
+    maintain: 'Changes the settings, and says who uses the repository.',
+    member: 'Uses the repositories they were given.',
+    admin: 'Uses every repository, and manages the people and the plugins of the server.',
+    owner: 'Does what an admin does, and names admins and owners.',
   };
 
   let members = $state(null);
   let everyone = $state(null);
   let lanes = $state([]);
   let signIns = $state([]);
-  let failed = $state('');
   let busy = $state(false);
-  // What an invitation gave: shown once.
+  // Why the page could not be shown; and why what was asked did not work, by where it was asked: the `form`, the `table`.
+  let failed = $state('');
+  let wrong = $state({});
+  // What adding somebody new gave: how they connect, with their token. It stays until it is closed.
   let invited = $state(null);
 
   const owner = $derived(who?.role === 'owner');
@@ -47,95 +58,227 @@
   }
   load();
   ways()
-    .then((said) => (signIns = said.methods ?? []))
+    .then((said) => (signIns = (said.methods ?? []).filter((way) => way.ready !== false)))
     .catch(() => (signIns = []));
 
-  async function act(work) {
+  /** Does `work`, and answers whether it worked; what did not is said at `at`. */
+  async function act(at, work) {
     busy = true;
-    failed = '';
+    wrong = {};
+    let done = true;
     try {
       await work();
     } catch (error) {
-      failed = error.message;
+      done = false;
+      wrong = { [at]: error.message };
     }
     busy = false;
     await load();
+    return done;
   }
 
-  const grant = (user, role) => act(() => ask('server.grant', { user, role }));
-  const revoke = (user) => confirm(`Take ${repo} away from ${user}?`) && act(() => ask('server.grant', { user }));
-  const serverRole = (user, role) => act(() => people('server.people_role', { user, role }));
+  const grant = (user, role) =>
+    act('table', async () => {
+      await ask('server.grant', { user, role });
+      toast(`${user} may now ${role}`);
+    });
+  const revoke = (user) =>
+    act('table', async () => {
+      await ask('server.grant', { user });
+      toast(`${user} removed from ${repo}`);
+    });
+  const serverRole = (user, role) =>
+    act('table', async () => {
+      await people('server.people_role', { user, role });
+      toast(`${user} is now ${role === 'member' ? 'a member' : `an ${role}`}`);
+    });
   const removePerson = (user) =>
-    confirm(`Remove ${user} from the server? Their token and sessions stop working.`) &&
-    act(() => people('server.people_remove', { user }));
+    act('table', async () => {
+      await people('server.people_remove', { user });
+      toast(`${user} removed from this server`);
+    });
 
-  // Somebody already on the server, given this repository.
-  let adding = $state({ user: '', role: 'write' });
-  function addMember(event) {
+  // A role is saved as soon as it is chosen; one the server did not take goes back to what it was.
+  async function choose(event, save, was) {
+    const select = event.currentTarget;
+    if (!(await save(select.value))) select.value = was;
+  }
+
+  // The form that adds a person, opened from the head of the page. `fresh`:
+  // somebody new to the server, by a token or by who they are for a way to
+  // sign in; else somebody already on it, who is given this repository.
+  const blank = () => ({ user: '', email: '', way: 'token', login: '', role: 'member', repoRole: 'write' });
+  let adding = $state(false);
+  let fresh = $state(true);
+  let it = $state(blank());
+  function open() {
+    it = blank();
+    fresh = !repo;
+    adding = true;
+  }
+  let valid = $derived(it.user.trim() !== '' && (!fresh || it.way === 'token' || it.login.trim() !== ''));
+
+  function add(event) {
     event.preventDefault();
-    const { user, role } = adding;
-    if (!user.trim()) return;
-    act(async () => {
-      await ask('server.grant', { user: user.trim(), role });
-      adding = { user: '', role: 'write' };
+    if (!valid) return;
+    const user = it.user.trim();
+    const { email, way, login, role, repoRole } = it;
+    act('form', async () => {
+      if (fresh) {
+        const params = { user, role };
+        if (email.trim()) params.email = email.trim();
+        if (way !== 'token') params.identity = `${way}:${login.trim()}`;
+        const said = await people('server.people_add', params);
+        const port = said.port ?? '7421';
+        const address = `${location.hostname}:${port}/${repo ?? '<repository>'}`;
+        // How the server is known: its fingerprint, or, on this machine and in the clear, --plain.
+        const known = said.plain ? ' --plain' : said.fingerprint ? ` --fingerprint ${said.fingerprint}` : '';
+        const line = said.token ? `kito connect ${address} --token ${said.token}${known}` : `kito connect ${address}${known}`;
+        // The token is said this once: it is on the page before anything else can go wrong.
+        invited = { user, token: said.token, line, way };
+        if (repo) await ask('server.grant', { user, role: repoRole });
+      } else {
+        await ask('server.grant', { user, role: repoRole });
+        toast(`${user} added to ${repo}`);
+      }
+      adding = false;
     });
   }
 
-  // Somebody new: by a token, or by who they are for a way to sign in.
-  let invite = $state({ user: '', email: '', way: 'token', login: '', role: 'member', repoRole: 'write' });
-  function sendInvite(event) {
-    event.preventDefault();
-    const it = invite;
-    if (!it.user.trim()) return;
-    act(async () => {
-      const params = { user: it.user.trim(), role: it.role };
-      if (it.email.trim()) params.email = it.email.trim();
-      if (it.way !== 'token') params.identity = `${it.way}:${it.login.trim()}`;
-      const said = await people('server.people_add', params);
-      if (repo) await ask('server.grant', { user: params.user, role: it.repoRole });
-      const port = said.port ?? '7421';
-      const address = `${location.hostname}:${port}/${repo ?? '<repository>'}`;
-      // How the server is known: its fingerprint, or, on this machine and in the clear, --plain.
-      const known = said.plain ? ' --plain' : said.fingerprint ? ` --fingerprint ${said.fingerprint}` : '';
-      const line = said.token ? `kito connect ${address} --token ${said.token}${known}` : `kito connect ${address}${known}`;
-      invited = { user: params.user, token: said.token, line, way: it.way };
-      invite = { user: '', email: '', way: 'token', login: '', role: 'member', repoRole: 'write' };
-    });
-  }
-
-  function copy(text) {
-    navigator.clipboard?.writeText(text);
+  async function copy(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast('Copied');
+    } catch {
+      toast('Not copied: select the line and copy it', 'warn');
+    }
   }
 
   const openLanes = (user) => lanes.filter((lane) => lane.owner === user && lane.state !== 'closed');
+  // Those on the server who do not have this repository yet.
   const names = $derived((everyone ?? []).map((person) => person.user).filter((name) => !members?.some((m) => m.user === name)));
 </script>
 
-<div class="page-head">
-  <div>
-    <h1>{repo ? `Who uses ${repo}` : 'People of this server'}</h1>
-    <p class="lead">
-      {#if repo}
-        Each person has a role here, and nothing in the repositories they were not given. A change counts at once, in
-        the connections that are open.
-      {:else}
-        Each person is a member, an admin or an owner of the server, and has a role in each repository they were given.
-      {/if}
-    </p>
+{#snippet person(one)}
+  <div class="items">
+    <span class="row-title">{one.user}</span>
+    {#if one.email}<span class="small soft">{one.email}</span>{/if}
+    {#each one.logins ?? [] as login}<span class="tag">{login}</span>{/each}
   </div>
-</div>
+{/snippet}
 
-{#if failed}<p class="error" role="alert">{failed}</p>{/if}
+{#snippet roleHere()}
+  <label class="field">
+    <span>{fresh ? `In ${repo}` : 'Role'}</span>
+    <select bind:value={it.repoRole}>
+      {#each repoRoles as role}<option value={role}>{role}</option>{/each}
+    </select>
+    <span class="hint">{means[it.repoRole]}</span>
+  </label>
+{/snippet}
+
+{#snippet roles(which)}
+  <h2 class="section-title">Roles</h2>
+  <dl class="panel pad kv narrow">
+    {#each which as role}
+      <dt>{role}</dt>
+      <dd>{means[role]}</dd>
+    {/each}
+  </dl>
+{/snippet}
+
+<PageHead
+  title="People"
+  lead={repo
+    ? `Who may use ${repo}, and as what. A change counts at once, also in the connections that are open.`
+    : 'Everybody on this server. Each is a member, an admin or an owner of it, and has a role in the repositories they were given.'}
+>
+  {#snippet actions()}
+    <button class="primary" disabled={adding} onclick={open}>Add a person</button>
+  {/snippet}
+</PageHead>
+
+<Err message={failed} />
+
+{#if adding}
+  <form class="panel pad narrow form" onsubmit={add}>
+    <h3>Add a person</h3>
+    {#if repo && admin}
+      <div>
+        <div class="seg" role="group" aria-label="Who is added">
+          <button type="button" aria-pressed={!fresh} onclick={() => (fresh = false)}>Already on this server</button>
+          <button type="button" aria-pressed={fresh} onclick={() => (fresh = true)}>New to this server</button>
+        </div>
+      </div>
+    {/if}
+    <div class="fields">
+      <label class="field">
+        <span>Name</span>
+        <input use:focus list={fresh ? undefined : 'people-names'} placeholder="carol" bind:value={it.user} />
+        {#if !fresh}
+          <span class="hint">{admin ? 'Somebody already on this server.' : 'Somebody already on this server: an admin adds new people to it.'}</span>
+        {/if}
+      </label>
+      {#if fresh}
+        <label class="field">
+          <span>Email</span>
+          <input placeholder="carol@example.com" bind:value={it.email} />
+          <span class="hint">Optional.</span>
+        </label>
+        <label class="field">
+          <span>Signs in with</span>
+          <select bind:value={it.way}>
+            <option value="token">A token, shown once</option>
+            {#each signIns as way}<option value={way.method}>{way.about || way.method}</option>{/each}
+          </select>
+        </label>
+        {#if it.way !== 'token'}
+          <label class="field">
+            <span>Their login</span>
+            <input placeholder="carol" bind:value={it.login} />
+            <span class="hint">The name they have where they sign in ({it.way}).</span>
+          </label>
+        {/if}
+        <label class="field">
+          <span>On the server</span>
+          <select bind:value={it.role}>
+            {#each serverRoles as role}<option value={role} disabled={!owner && role !== 'member'}>{role}</option>{/each}
+          </select>
+          <span class="hint">{means[it.role]}{owner ? '' : ' Only an owner names admins and owners.'}</span>
+        </label>
+        {#if repo}{@render roleHere()}{/if}
+      {:else}
+        {@render roleHere()}
+      {/if}
+    </div>
+    <datalist id="people-names">
+      {#each names as name}<option value={name}></option>{/each}
+    </datalist>
+    <div class="controls">
+      <button class="primary" disabled={busy || !valid}>{busy ? 'Adding…' : 'Add'}</button>
+      <button type="button" class="quiet" onclick={() => (adding = false)}>Cancel</button>
+    </div>
+    <Err message={wrong.form} />
+  </form>
+{/if}
 
 {#if invited}
-  <div class="panel said" role="status">
-    <p><strong>{invited.user}</strong> is added.
-      {#if invited.token}Their token is shown this once: pass it on now.{:else}They sign in with {invited.way}, and have no token.{/if}</p>
-    <div class="line">
-      <code class="mono">{invited.line}</code>
+  <div class="result narrow" role="status">
+    <div class="controls">
+      <p class="grow">
+        <b>{invited.user}</b> is added.
+        {#if invited.token}
+          Their token is shown this once: pass it on now.
+        {:else}
+          They sign in with {invited.way}, and have no token.
+        {/if}
+      </p>
+      <button class="quiet sm icon" aria-label="Close" onclick={() => (invited = null)}><Icon name="close" /></button>
+    </div>
+    <div class="copy">
+      <pre>{invited.line}</pre>
       <button class="sm" onclick={() => copy(invited.line)}>Copy</button>
     </div>
-    <button class="sm" onclick={() => (invited = null)}>Done</button>
   </div>
 {/if}
 
@@ -143,192 +286,146 @@
   {#if members === null && !failed}
     <Loading />
   {:else if members}
-    <div class="panel table-wrap">
-    <table class="people">
-      <thead><tr><th>Person</th><th>Role</th><th>Last here</th><th>Open lanes</th><th></th></tr></thead>
-      <tbody>
-        {#each members as member (member.user)}
-          <tr>
-            <td>
-              <b>{member.user}</b>
-              {#if member.email}<span class="faint">{member.email}</span>{/if}
-              {#each member.logins ?? [] as login}<span class="chip">{login}</span>{/each}
-            </td>
-            <td>
-              {#if member.admin}
-                <span class="chip" title="An admin of the server: every repository">admin · maintain</span>
-              {:else}
-                <select value={member.role} disabled={busy} onchange={(event) => grant(member.user, event.currentTarget.value)} title={means[member.role]}>
-                  {#each repoRoles as role}<option value={role}>{role}</option>{/each}
-                </select>
-              {/if}
-            </td>
-            <td class="soft">{member.seen_ms ? ago(member.seen_ms) : 'never'}</td>
-            <td>
-              {#each openLanes(member.user) as lane}
-                <a class="chip" href={laneLink(lane.id)} title={lane.intent}>{lane.id.replace('lane/', '#')}</a>
-              {:else}<span class="faint">none</span>{/each}
-            </td>
-            <td>{#if !member.admin}<button class="quiet" disabled={busy} onclick={() => revoke(member.user)}>Remove</button>{/if}</td>
-          </tr>
-        {/each}
-      </tbody>
-    </table>
-    </div>
-
-    <form class="panel row" onsubmit={addMember}>
-      <strong>Give {repo} to</strong>
-      <input list="people-names" placeholder="name on the server" bind:value={adding.user} />
-      <datalist id="people-names">{#each names as name}<option value={name}></option>{/each}</datalist>
-      <span>as</span>
-      <select bind:value={adding.role}>{#each repoRoles as role}<option value={role}>{role}</option>{/each}</select>
-      <button class="primary" disabled={busy || !adding.user.trim()}>Give</button>
-      <span class="faint">{means[adding.role]}</span>
-    </form>
-  {/if}
-{:else if everyone}
-  <div class="panel table-wrap">
-  <table class="people">
-    <thead><tr><th>Person</th><th>On the server</th><th>Repositories</th><th>Last here</th><th></th></tr></thead>
-    <tbody>
-      {#each everyone as person (person.user)}
-        <tr>
-          <td>
-            <b>{person.user}</b>
-            {#if person.email}<span class="faint">{person.email}</span>{/if}
-            {#each person.logins ?? [] as login}<span class="chip">{login}</span>{/each}
-          </td>
-          <td>
-            <select
-              value={person.role}
-              disabled={busy || (!owner && person.role !== 'member') || person.user === who.user}
-              onchange={(event) => serverRole(person.user, event.currentTarget.value)}
-              title={means[person.role]}
-            >
-              {#each serverRoles as role}<option value={role} disabled={!owner && role !== 'member'}>{role}</option>{/each}
-            </select>
-          </td>
-          <td>
-            {#if person.role !== 'member'}<span class="chip">every repository</span>{/if}
-            {#each Object.entries(person.access ?? {}) as [name, role]}
-              <a class="chip" href={`?repo=${encodeURIComponent(name)}#/people`}>{name} · {role}</a>
+    <div class="stack">
+      <div class="panel table-wrap">
+        <table>
+          <thead>
+            <tr><th>Person</th><th>Role</th><th>Last here</th><th>Open lanes</th><th class="actions"><span class="sr">Actions</span></th></tr>
+          </thead>
+          <tbody>
+            {#each members as member (member.user)}
+              <tr>
+                <td>{@render person(member)}</td>
+                <td>
+                  {#if member.admin}
+                    admin · maintain
+                  {:else}
+                    <select
+                      class="sm"
+                      aria-label={`Role of ${member.user}`}
+                      value={member.role}
+                      disabled={busy}
+                      onchange={(event) => choose(event, (role) => grant(member.user, role), member.role)}
+                    >
+                      {#each repoRoles as role}<option value={role}>{role}</option>{/each}
+                    </select>
+                  {/if}
+                </td>
+                <td class="soft"><Time ms={member.seen_ms} /></td>
+                <td>
+                  <div class="items">
+                    {#each openLanes(member.user) as lane}
+                      <a class="ref" href={laneLink(lane.id)}>{laneName(lane.id)}</a>
+                    {:else}
+                      <span class="none">None</span>
+                    {/each}
+                  </div>
+                </td>
+                <td class="actions">
+                  {#if !member.admin}
+                    <Confirm
+                      sm
+                      label="Remove"
+                      ask={`Remove ${member.user} from ${repo}? They can no longer see it or work in it.`}
+                      disabled={busy}
+                      onyes={() => revoke(member.user)}
+                    />
+                  {/if}
+                </td>
+              </tr>
             {:else}
-              {#if person.role === 'member'}<span class="faint">none given</span>{/if}
+              <tr>
+                <td colspan="5"><Empty inset title="Nobody yet">Add a person to give them this repository.</Empty></td>
+              </tr>
             {/each}
-          </td>
-          <td class="soft">{person.seen_ms ? ago(person.seen_ms) : 'never'}</td>
-          <td>
-            {#if person.user !== who.user && (owner || person.role === 'member')}
-              <button class="quiet" disabled={busy} onclick={() => removePerson(person.user)}>Remove</button>
-            {/if}
-          </td>
-        </tr>
-      {/each}
-    </tbody>
-  </table>
-  </div>
-{/if}
-
-{#if admin}
-  <form class="panel invite" onsubmit={sendInvite}>
-    <h2>Add somebody new{repo ? ` to ${repo}` : ''}</h2>
-    <label>Name <input placeholder="carol" bind:value={invite.user} /></label>
-    <label>Email <input placeholder="optional" bind:value={invite.email} /></label>
-    <label>
-      Signs in with
-      <select bind:value={invite.way}>
-        <option value="token">a token, shown once</option>
-        {#each signIns as way}<option value={way.method}>{way.about || way.method}</option>{/each}
-      </select>
-    </label>
-    {#if invite.way !== 'token'}
-      <label>Their {invite.way} login <input placeholder="carol" bind:value={invite.login} /></label>
-    {/if}
-    <label>
-      On the server
-      <select bind:value={invite.role}>
-        {#each serverRoles as role}<option value={role} disabled={!owner && role !== 'member'}>{role}</option>{/each}
-      </select>
-    </label>
-    {#if repo}
-      <label>In {repo} <select bind:value={invite.repoRole}>{#each repoRoles as role}<option value={role}>{role}</option>{/each}</select></label>
-    {/if}
-    <div>
-      <button class="primary" disabled={busy || !invite.user.trim() || (invite.way !== 'token' && !invite.login.trim())}>Add</button>
+          </tbody>
+        </table>
+      </div>
+      <Err message={wrong.table} />
     </div>
-  </form>
+    {@render roles(repoRoles)}
+    <p class="footnote">
+      An admin or an owner of the server maintains every repository: that role is not changed here, and they are not removed.
+    </p>
+  {/if}
+{:else if everyone === null && !failed}
+  <Loading />
+{:else if everyone}
+  <div class="stack">
+    <div class="panel table-wrap">
+      <table>
+        <thead>
+          <tr><th>Person</th><th>On the server</th><th>Repositories</th><th>Last here</th><th class="actions"><span class="sr">Actions</span></th></tr>
+        </thead>
+        <tbody>
+          {#each everyone as one (one.user)}
+            <tr>
+              <td>{@render person(one)}</td>
+              <td>
+                <select
+                  class="sm"
+                  aria-label={`Role of ${one.user} on the server`}
+                  value={one.role}
+                  disabled={busy || (!owner && one.role !== 'member') || one.user === who.user}
+                  onchange={(event) => choose(event, (role) => serverRole(one.user, role), one.role)}
+                >
+                  {#each serverRoles as role}<option value={role} disabled={!owner && role !== 'member'}>{role}</option>{/each}
+                </select>
+              </td>
+              <td>
+                <div class="items">
+                  {#if one.role !== 'member'}<span>every repository</span>{/if}
+                  {#each Object.entries(one.access ?? {}) as [name, role]}
+                    <a href={`${location.pathname}?repo=${encodeURIComponent(name)}#/people`}>{name} ({role})</a>
+                  {:else}
+                    {#if one.role === 'member'}<span class="none">None</span>{/if}
+                  {/each}
+                </div>
+              </td>
+              <td class="soft"><Time ms={one.seen_ms} /></td>
+              <td class="actions">
+                {#if one.user !== who.user && (owner || one.role === 'member')}
+                  <Confirm
+                    sm
+                    label="Remove"
+                    ask={`Remove ${one.user} from this server? Their token and their sessions stop working.`}
+                    disabled={busy}
+                    onyes={() => removePerson(one.user)}
+                  />
+                {/if}
+              </td>
+            </tr>
+          {:else}
+            <tr>
+              <td colspan="5"><Empty inset title="Nobody yet">Add a person to give them a token, or a way to sign in.</Empty></td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+    <Err message={wrong.table} />
+  </div>
+  {@render roles(serverRoles)}
+  <p class="footnote">Only an owner changes or removes an admin or an owner, and nobody changes or removes themselves.</p>
 {/if}
 
 <style>
-  td select {
-    height: var(--control-sm);
-  }
-  .people td b {
-    margin-right: 6px;
-    font-weight: 600;
-  }
-  .people .chip {
-    margin: 0 4px 2px 0;
-  }
-  .row {
+  /* What stands side by side in a cell: a name and what is known of it, lanes, repositories. */
+  .items {
     display: flex;
-    align-items: center;
-    gap: 8px;
     flex-wrap: wrap;
-    padding: 12px 16px;
-    margin-top: 12px;
-    font-size: 13px;
+    align-items: baseline;
+    gap: 2px 8px;
   }
-  .row strong {
-    font-weight: 600;
-  }
-  .invite {
-    display: grid;
-    gap: 10px;
-    padding: 16px;
-    margin-top: 24px;
-    max-width: 560px;
-    font-size: 13px;
-  }
-  .invite h2 {
-    margin: 0 0 4px;
-  }
-  .invite label {
-    display: grid;
-    grid-template-columns: 140px 1fr;
-    align-items: center;
-    gap: 8px;
-    font-weight: 500;
-  }
-  @media (max-width: 520px) {
-    .invite label {
-      grid-template-columns: 1fr;
-      gap: 6px;
-    }
-  }
-  .said {
-    display: grid;
-    gap: 8px;
-    justify-items: start;
-    padding: 14px 16px;
-    margin: 0 0 16px;
-    font-size: 13px;
-  }
-  .said p {
-    margin: 0;
-  }
-  .line {
+  /* The line to pass on, and the button that copies it: a long line scrolls in its own box. */
+  .copy {
     display: flex;
-    gap: 8px;
     align-items: center;
-    width: 100%;
+    gap: 8px;
+    min-width: 0;
   }
-  .line code {
+  .copy pre {
     flex: 1;
-    overflow-wrap: anywhere;
-    background: var(--bg);
-    border: 1px solid var(--line);
-    padding: 6px 8px;
-    border-radius: 6px;
+    min-width: 0;
   }
 </style>

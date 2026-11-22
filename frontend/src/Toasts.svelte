@@ -1,13 +1,16 @@
 <script>
   import { dismiss, toasts } from './toast.svelte.js';
+  import Icon from './Icon.svelte';
+  import { shell } from './shell.svelte.js';
 </script>
 
-<div class="toasts" role="status" aria-live="polite">
+<!-- Over what is stuck to the foot of the window, never on it. -->
+<div class="toasts" role="status" aria-live="polite" style:bottom={shell.foot > 0 ? `${shell.foot + 12}px` : null}>
   {#each toasts as one (one.id)}
     <div class="toast {one.tone}">
       <span class="dot" aria-hidden="true"></span>
       <span class="text">{one.text}</span>
-      <button class="bare close" aria-label="Dismiss" onclick={() => dismiss(one.id)}>✕</button>
+      <button class="bare close" aria-label="Dismiss" onclick={() => dismiss(one.id)}><Icon name="close" size={14} /></button>
     </div>
   {/each}
 </div>
@@ -33,7 +36,6 @@
     border-radius: var(--radius-panel);
     background: var(--panel);
     color: var(--ink);
-    font-size: 13px;
     box-shadow: var(--menu-shadow);
     pointer-events: auto;
     animation: rise 0.16s ease-out;
@@ -55,9 +57,10 @@
     overflow-wrap: anywhere;
   }
   .close {
+    display: inline-grid;
+    place-items: center;
     color: var(--faint);
-    font-size: 11px;
-    padding: 2px 4px;
+    padding: 2px;
     cursor: pointer;
   }
   .close:hover {

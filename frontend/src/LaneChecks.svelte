@@ -1,73 +1,41 @@
 <script>
-  // What stands between a lane and where it lands, one thing a line.
-  let { rows } = $props();
+  // What stands between a lane and the lane it is integrated into, one
+  // thing a line: how it stands, what it is, and a sentence on it.
+  import { CHECK_WORDS } from './standing.js';
 
-  const word = { ok: 'passes', warn: 'to look at', bad: 'stops it' };
+  let { rows } = $props();
 </script>
 
-<ul class="panel checks">
+<ul class="panel rows">
   {#each rows as row (row.name)}
     <li>
-      <span class={`ring ${row.tone || 'none'}`} aria-hidden="true"></span>
-      <div>
-        <p class="name">
-          {row.name}
-          {#if row.tone}<span class={`chip ${row.tone}`}>{word[row.tone]}</span>{/if}
-        </p>
-        <p class="soft text">{row.text}</p>
-        {#if row.commands}
-          <ul class="commands">
-            {#each row.commands as command}<li class="mono">{command}</li>{/each}
-          </ul>
-        {/if}
+      <div class="row">
+        <span class={['ring', row.tone]} aria-hidden="true"></span>
+        <div class="row-body">
+          <span class="row-title">{row.name}<span class="sr">, {CHECK_WORDS[row.tone]}</span></span>
+          <span class="soft">{row.text}</span>
+          {#if row.items}
+            <ul class="items">
+              {#each row.items as item}<li class="mono">{item}</li>{/each}
+            </ul>
+          {/if}
+        </div>
       </div>
     </li>
   {/each}
 </ul>
-<p class="faint note">
-  What the checks of the repository say of this lane is known when it asks to go in: the answer is shown where it was
-  asked, beside this.
+<p class="footnote">
+  What the check commands say of this lane is known once it asks to be integrated: the answer is shown under the head of
+  this page.
 </p>
 
 <style>
-  .checks {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-  .checks > li {
-    display: flex;
-    gap: 12px;
-    padding: 12px 16px;
-  }
-  .checks > li + li {
-    border-top: 1px solid var(--line);
-  }
-  .ring.none {
-    border-color: var(--line);
-  }
-  .name {
-    margin: 0;
-    font-weight: 600;
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    flex-wrap: wrap;
-  }
-  .text {
-    margin: 2px 0 0;
-    font-size: 13px;
-    overflow-wrap: anywhere;
-  }
-  .commands {
-    list-style: none;
-    margin: 6px 0 0;
-    padding: 0;
+  .items {
     display: grid;
     gap: 2px;
-  }
-  .note {
-    margin: 10px 2px 0;
-    font-size: 13px;
+    margin: 4px 0 0;
+    padding: 0;
+    list-style: none;
+    overflow-wrap: anywhere;
   }
 </style>

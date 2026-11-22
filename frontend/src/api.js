@@ -160,27 +160,20 @@ export function laneLink(lane) {
   return `#/lane/${lane.replace(/^lane\//, '')}`;
 }
 
+/** The address of a task's page (`task#3`). */
+export function taskLink(id) {
+  return `#/tasks?task=${encodeURIComponent(id)}`;
+}
+
+// What a role in a repository lets one do. On one's own machine nothing
+// says a role, and everything may be done.
+export const mayWrite = (role) => role !== 'read';
+export const mayIntegrate = (role) => !role || role === 'integrate' || role === 'maintain';
+
 /** Puts the cursor in a field as soon as it is on the page (`use:focus`). */
 export function focus(node) {
   node.focus();
 }
 
-/** `3 minutes ago`, from milliseconds since 1970. */
-export function ago(ms) {
-  if (!ms) return '';
-  const seconds = Math.max(0, Math.round((Date.now() - ms) / 1000));
-  const units = [
-    [60, 'second'],
-    [60, 'minute'],
-    [24, 'hour'],
-    [30, 'day'],
-    [12, 'month'],
-    [Infinity, 'year'],
-  ];
-  let value = seconds;
-  for (const [size, name] of units) {
-    if (value < size) return value <= 1 && name === 'second' ? 'just now' : `${value} ${name}${value === 1 ? '' : 's'} ago`;
-    value = Math.floor(value / size);
-  }
-  return '';
-}
+// How values are written lives in `format.js`; `ago` is still asked for here.
+export { ago } from './format.js';

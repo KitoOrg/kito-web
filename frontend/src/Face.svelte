@@ -23,12 +23,13 @@
     background: var(--accent);
     color: var(--accent-ink);
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 600;
+    line-height: 1;
     text-transform: uppercase;
     flex: none;
   }
   .face.agent {
-    border-radius: 6px;
+    border-radius: var(--radius);
     background: var(--done-bg);
     color: var(--done);
     text-transform: none;

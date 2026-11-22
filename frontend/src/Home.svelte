@@ -3,46 +3,58 @@
   // person who is signed in, the repositories they may use, and who is at
   // work. One person watches many agents: this is where they see what is
   // stopped until they act.
-  import { ago } from './api.js';
   import { assistantOf } from './assistants.js';
-  import Assistant from './Assistant.svelte';
+  import { count } from './format.js';
+  import { standing } from './standing.js';
   import Empty from './Empty.svelte';
+  import Err from './Err.svelte';
+  import Face from './Face.svelte';
   import Loading from './Loading.svelte';
+  import PageHead from './PageHead.svelte';
+  import State from './State.svelte';
+  import Time from './Time.svelte';
 
   let { seen, who } = $props();
 
-  // What a repository's lanes come to, in three numbers.
-  const tally = (repo) => ({
-    open: repo.lanes.length,
-    waiting: repo.lanes.filter((lane) => lane.state === 'awaiting_approval').length,
-    conflicts: repo.lanes.reduce((sum, lane) => sum + (lane.conflicts?.length ?? 0), 0),
-    last: Math.max(0, ...repo.board.map((lane) => lane.last_change_ms ?? 0)),
-  });
+  // What a repository's lanes come to: how many are open, how many of
+  // them stand where somebody acts, and when one last changed.
+  function tally(repo) {
+    const stands = repo.lanes.map((lane) => standing(lane));
+    const places = ['review', 'ready', 'conflicts']
+      .map((place) => stands.filter((one) => one.place === place))
+      .filter((there) => there.length > 0)
+      .map((there) => ({ ...there[0], lanes: there.length }));
+    return { open: repo.lanes.length, places, last: Math.max(0, ...repo.board.map((lane) => lane.last_change_ms ?? 0)) };
+  }
 </script>
+
+<PageHead title="Needs you" lead="What is stopped until you act, in every repository you may use." />
 
 {#if who.repos.length === 0}
   <Empty title="No repository yet">
-    You are signed in as {who.user}, and this server has no repository you may use. Whoever runs it gives you one.
+    You are signed in as {who.user}, and this server has no repository you may use. An admin gives you one.
   </Empty>
 {:else if seen === null}
   <Loading />
 {:else}
   <div class="cols">
     <div>
-      <h2 class="section-title">Needs you</h2>
       {#if seen.needs.length === 0}
-        <Empty title="Nothing waits for you.">Agents are at work, or done.</Empty>
+        <Empty title="Nothing waits for you">Agents are at work, or done.</Empty>
       {:else}
-        <ul class="panel list">
+        <ul class="panel rows">
           {#each seen.needs as need (need.href + need.kind)}
             <li>
               <a class="row" href={need.href}>
-                <span class={`ring ${need.tone}`} aria-hidden="true"></span>
-                <span class="body">
-                  <span class="title">{need.title}</span>
-                  <span class="meta"><span class="mono">{need.where}</span> · {need.what}</span>
+                <span class={['ring', need.tone]} aria-hidden="true"></span>
+                <span class="row-body">
+                  <span class="row-title">{need.title}</span>
+                  <span class="row-meta">
+                    {#if need.repo}{need.repo} ·{/if}
+                    {#if need.title !== need.id}<span class="ref">{need.id}</span> ·{/if}
+                    {need.what}
+                  </span>
                 </span>
-                <span class={`chip ${need.tone}`}>{need.kind}</span>
               </a>
             </li>
           {/each}
@@ -53,58 +65,67 @@
       <div class="cards">
         {#each seen.repos as repo (repo.name)}
           {@const sum = tally(repo)}
-          <a class="panel card" href={`?repo=${encodeURIComponent(repo.name)}#/`}>
-            <span class="name mono">{repo.name}</span>
-            <span class="faint role">you may {repo.role}</span>
-            {#if repo.error}
-              <span class="error small">{repo.error}</span>
-            {:else}
-              <span class="numbers">
-                <span><b>{sum.open}</b> {sum.open === 1 ? 'open lane' : 'open lanes'}</span>
-                {#if sum.waiting > 0}<span><b>{sum.waiting}</b> waiting</span>{/if}
-                {#if sum.conflicts > 0}<span class="bad"><b>{sum.conflicts}</b> {sum.conflicts === 1 ? 'conflict' : 'conflicts'}</span>{/if}
-              </span>
-              <span class="faint last">{sum.last > 0 ? `Last change ${ago(sum.last)}` : 'Nothing in progress'}</span>
-            {/if}
+          <a class="panel pad" href={`?repo=${encodeURIComponent(repo.name)}#/`}>
+            <div class="box">
+              <div>
+                <h3>{repo.name}</h3>
+                <p class="soft small">you may {repo.role}</p>
+              </div>
+              {#if repo.error}
+                <Err message={repo.error} />
+              {:else}
+                <p class="facts">
+                  <span>{count(sum.open, 'open lane')}</span>
+                  {#each sum.places as place (place.place)}
+                    <span><span class="tag">{place.text}</span> <span class={['count', place.tone === 'bad' && 'bad']}>{place.lanes}</span></span>
+                  {/each}
+                </p>
+                {#if sum.last > 0}<p class="soft small">Last change <Time ms={sum.last} /></p>{/if}
+              {/if}
+            </div>
           </a>
         {/each}
       </div>
     </div>
 
-    <aside class="panel side">
-      <section>
+    <aside class="stack">
+      <section class="panel pad box">
         <h3>At work now</h3>
-        {#if seen.atWork.length === 0}
-          <p class="faint">No lane is open.</p>
-        {/if}
         {#each seen.atWork as one (one.href)}
+          {@const known = one.assistant?.name ? assistantOf(one.assistant) : null}
           <a class="worker" href={one.href}>
-            {#if one.assistant?.name}
-              <Assistant assistant={one.assistant} big />
-            {:else}
-              <span class="agent" aria-hidden="true">{one.agent.slice(0, 2)}</span>
-            {/if}
-            <span>
-              <b>{one.agent}</b>
-              {#if one.assistant?.name}
-                <span class="with">
-                  {assistantOf(one.assistant).label}{#if one.assistant.model}&nbsp;· {one.assistant.model}{/if}
-                </span>
-              {/if}
-              <span class="faint">{one.where} · {one.last > 0 ? ago(one.last) : one.state.replaceAll('_', ' ')}</span>
+            <Face name={one.agent} agent assistant={one.assistant} />
+            <span class="row-body">
+              <span>
+                <span class="row-title name">{one.agent}</span>
+                {#if known}
+                  <span class="row-meta">{known.label}{#if one.assistant.model}&nbsp;· <span class="mono">{one.assistant.model}</span>{/if}</span>
+                {/if}
+              </span>
+              <span class="row-meta">
+                {#if one.repo}{one.repo} ·{/if}
+                <span class="ref">{one.id}</span> ·
+                {#if one.last > 0}<Time ms={one.last} />{:else}<State said={one.stands} plain />{/if}
+              </span>
             </span>
           </a>
+        {:else}
+          <p class="none">None</p>
         {/each}
       </section>
       {#if seen.overlaps.length > 0}
-        <section>
+        <section class="panel pad box">
           <h3>On the same code</h3>
           {#each seen.overlaps as one (one.key)}
-            <a class="overlap" href={one.href}>
-              <span class="mono">{one.where}</span>{#if one.what}: <span class="mono">{one.what}</span>{/if}
-            </a>
+            <p class="small soft pair">
+              {#if one.repo}<a href={`?repo=${encodeURIComponent(one.repo)}#/`}>{one.repo}</a> ·{/if}
+              <a class="ref" href={one.lanes[0].href}>{one.lanes[0].id}</a> and
+              <a class="ref" href={one.lanes[1].href}>{one.lanes[1].id}</a>{#if one.what}:
+                {#if one.whatHref}<a class="ref" href={one.whatHref}>{one.what}</a>{:else}<span class="ref">{one.what}</span>{/if}
+              {/if}
+            </p>
           {/each}
-          <p class="faint">Their agents were told of each other. Whether the changes agree is for a person to see.</p>
+          <p class="hint">Their agents were told of each other. Whether the changes agree is for a person to see.</p>
         </section>
       {/if}
     </aside>
@@ -112,154 +133,27 @@
 {/if}
 
 <style>
-  .cols {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 300px;
-    gap: 24px;
-    align-items: start;
-  }
-  .list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-  }
-  .list li + li {
-    border-top: 1px solid var(--line);
-  }
-  .row {
+  /* What a repository's lanes come to, on a line that wraps. */
+  .facts {
     display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 12px 16px;
-    color: inherit;
-  }
-  .row:hover {
-    text-decoration: none;
-    background: var(--hover);
-  }
-  .body {
-    flex: 1;
-    min-width: 0;
-    display: grid;
-    gap: 2px;
-  }
-  .title {
-    font-weight: 500;
-    overflow-wrap: anywhere;
-  }
-  .meta {
-    font-size: 12.5px;
-    color: var(--soft);
-  }
-  .cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 12px;
-  }
-  .card {
-    display: grid;
-    gap: 2px;
-    padding: 14px 16px;
-    color: inherit;
-    transition: border-color 0.12s;
-  }
-  .card:hover {
-    text-decoration: none;
-    border-color: var(--line-strong);
-  }
-  .name {
-    font-weight: 600;
-    font-size: 13px;
-    color: var(--ink);
-  }
-  .role,
-  .last {
-    font-size: 12.5px;
-  }
-  .numbers {
-    display: flex;
-    gap: 14px;
     flex-wrap: wrap;
-    margin: 8px 0 2px;
-    font-size: 12.5px;
-    color: var(--soft);
-    font-variant-numeric: tabular-nums;
+    align-items: center;
+    gap: 4px 12px;
   }
-  .numbers b {
-    color: var(--ink);
-    font-weight: 600;
-  }
-  .numbers .bad,
-  .numbers .bad b {
-    color: var(--bad);
-  }
-  .small {
-    margin: 6px 0 0;
-  }
-  .side {
-    overflow: hidden;
-  }
-  .side section {
-    padding: 14px 16px;
-  }
-  .side section + section {
-    border-top: 1px solid var(--line);
-  }
-  h3 {
-    margin: 0 0 10px;
-  }
+  /* Who is at work: a face, and beside it who and where. All of it leads to the lane. */
   .worker {
     display: flex;
-    gap: 10px;
     align-items: center;
-    margin: 0 -8px;
-    padding: 6px 8px;
-    border-radius: var(--radius);
+    gap: 8px;
     color: inherit;
-    font-size: 13px;
   }
   .worker:hover {
     text-decoration: none;
-    background: var(--hover);
   }
-  .worker b {
-    font-weight: 600;
+  .worker:hover .name {
+    text-decoration: underline;
   }
-  .worker .faint {
-    display: block;
-    font-size: 12px;
-  }
-  .with {
-    margin-left: 4px;
-    font-size: 12px;
-    color: var(--soft);
-  }
-  .agent {
-    display: grid;
-    place-items: center;
-    width: 26px;
-    height: 26px;
-    border-radius: 6px;
-    background: var(--done-bg);
-    color: var(--done);
-    font-size: 11px;
-    font-weight: 600;
-    flex: none;
-  }
-  .overlap {
-    display: block;
-    font-size: 13px;
-    color: var(--soft);
-    margin: 4px 0;
-  }
-  .side p {
-    margin: 6px 0 0;
-    font-size: 12px;
-  }
-  @media (max-width: 820px) {
-    .cols {
-      grid-template-columns: 1fr;
-    }
+  .pair {
+    overflow-wrap: anywhere;
   }
 </style>

@@ -2,8 +2,19 @@
   // The server's audit log (Kito 0.35), for its admins: what changed the
   // server and who did it, or each request; and whether the chain of the
   // log is whole.
-  import { ago, people } from './api.js';
+  import { people } from './api.js';
+  import { count, humanize, spans } from './format.js';
+  import { outcome } from './standing.js';
+  import { toast } from './toast.svelte.js';
+  import Empty from './Empty.svelte';
+  import Err from './Err.svelte';
   import Loading from './Loading.svelte';
+  import PageHead from './PageHead.svelte';
+  import State from './State.svelte';
+  import Time from './Time.svelte';
+
+  // The most lines one search asks for.
+  const LIMIT = 300;
 
   let requests = $state(false);
   let who = $state('');
@@ -11,108 +22,143 @@
   let repo = $state('');
   let days = $state('');
   let entries = $state(null);
-  let whole = $state(null);
+  let loading = $state(true);
+  // Whether the last search was narrowed: what to say when it found nothing.
+  let narrowed = $state(false);
   let failed = $state('');
+  let whole = $state(null);
+  let checking = $state(false);
+  let checkFailed = $state('');
 
+  // Searches answer in the order they come back: only the last one asked is shown.
+  let asked = 0;
   async function load(event) {
     event?.preventDefault();
-    const params = { requests, limit: 300 };
+    const params = { requests, limit: LIMIT };
     if (who.trim()) params.who = who.trim();
     if (kind.trim()) params.kind = kind.trim();
     if (repo.trim()) params.repo = repo.trim();
     if (days) params.since_ms = Date.now() - Number(days) * 86400000;
+    const mine = ++asked;
+    loading = true;
+    failed = '';
     try {
-      entries = await people('server.audit', params);
+      const found = await people('server.audit', params);
+      if (mine !== asked) return;
+      entries = found;
+      narrowed = Object.keys(params).length > 2;
       failed = '';
     } catch (error) {
+      if (mine !== asked) return;
       failed = error.message;
     }
+    loading = false;
   }
-  async function verify() {
+
+  // `told`: somebody asked for it, and is told what it found.
+  async function verify(told = false) {
+    checking = true;
+    checkFailed = '';
     try {
       whole = await people('server.audit_verify');
+      if (told) toast(whole.whole ? 'The log is whole' : 'The log is broken', whole.whole ? 'ok' : 'bad');
     } catch (error) {
-      failed = error.message;
+      checkFailed = error.message;
     }
+    checking = false;
   }
   load();
   verify();
 </script>
 
-<div class="page-head">
-  <div>
-    <h1>Audit log</h1>
-    <p class="lead">
-      What changed the server and who did it, kept forever; each request, kept 90 days. Every line is chained to the one
-      before it, so a line taken out or changed is found.
-    </p>
-  </div>
-  <div class="actions">
-  {#if whole}
-    {#if whole.whole}
-      <span class="chip ok" title="Each line carries the hash of the one before">whole · {whole.lines} lines</span>
-    {:else}
-      <span class="chip bad" title={whole.why}>NOT whole: {whole.why}</span>
-    {/if}
-  {/if}
-  <button onclick={verify}>Check again</button>
-  </div>
-</div>
+<PageHead title="Audit log">
+  {#snippet after()}
+    {#if whole?.whole}<span class="chip ok">whole</span>{:else if whole}<span class="chip bad">broken</span>{/if}
+  {/snippet}
+  {#snippet lead()}
+    What changed the server and who did it, kept forever; each request, kept 90 days. Every line is chained to the one before
+    it, so a line taken out or changed is found.
+    {#if whole?.whole}{count(whole.lines, 'line')} checked, all in order.{/if}
+  {/snippet}
+  {#snippet actions()}
+    <button disabled={checking} onclick={() => verify(true)}>{checking ? 'Checking…' : 'Check again'}</button>
+  {/snippet}
+</PageHead>
+
+<Err message={checkFailed} />
+{#if whole && !whole.whole}
+  <p class="notice">The chain of the log is broken at {whole.why}.</p>
+{/if}
 
 <form class="panel filters" onsubmit={load}>
-  <label class="check"><input type="checkbox" bind:checked={requests} onchange={() => load()} /> each request</label>
-  <input placeholder="who" bind:value={who} />
-  <input placeholder="what kind: role_changed, signed_in…" bind:value={kind} />
-  <input placeholder="repository" bind:value={repo} />
-  <select bind:value={days} onchange={() => load()}>
-    <option value="">any time</option>
-    <option value="1">last day</option>
-    <option value="7">last week</option>
-    <option value="30">last month</option>
+  <label class="check">
+    <input
+      type="checkbox"
+      checked={requests}
+      onchange={(event) => {
+        requests = event.currentTarget.checked;
+        load();
+      }}
+    />
+    Each request
+  </label>
+  <input aria-label="Who" placeholder="ada" bind:value={who} />
+  <input class="mono" aria-label="Kind" placeholder="role_changed" bind:value={kind} />
+  <input aria-label="Repository" placeholder="shop" bind:value={repo} />
+  <select
+    aria-label="Time"
+    value={days}
+    onchange={(event) => {
+      days = event.currentTarget.value;
+      load();
+    }}
+  >
+    {#each spans(1, 7, 30) as [n, label]}<option value={n}>{label}</option>{/each}
   </select>
-  <button class="primary">Show</button>
+  <button class="primary" disabled={loading}>{loading ? 'Searching…' : 'Search'}</button>
 </form>
-{#if failed}<p class="error" role="alert">{failed}</p>{/if}
+<Err message={failed} />
 
-{#if entries === null && !failed}
+{#if loading && !failed}
   <Loading lines={6} />
 {:else if entries}
   <div class="panel table-wrap">
-  <table class="log">
-    <thead><tr><th>When</th><th>Who</th><th>What</th><th></th><th>Repository</th></tr></thead>
-    <tbody>
-      {#each entries as entry}
-        <tr class:refused={entry.ok === false || /refused/.test(entry.kind)}>
-          <td class="faint" title={new Date(entry.at_ms).toLocaleString()}>{ago(entry.at_ms)}</td>
-          <td><b>{entry.by}</b></td>
-          <td class="mono">{entry.kind === 'request' ? entry.what : entry.kind}</td>
-          <td>{entry.kind === 'request' ? (entry.ok ? '' : 'refused') : entry.what}</td>
-          <td class="faint">{entry.repo ?? ''}</td>
-        </tr>
-      {:else}
-        <tr><td colspan="5" class="soft">Nothing.</td></tr>
-      {/each}
-    </tbody>
-  </table>
+    <table>
+      <thead>
+        <tr><th>When</th><th>Who</th><th>Kind</th><th>What</th><th>Repository</th></tr>
+      </thead>
+      <tbody>
+        {#each entries as entry}
+          <tr>
+            <td class="soft"><Time ms={entry.at_ms} /></td>
+            <td><span class="row-title">{entry.by}</span></td>
+            <td class="mono">{entry.kind === 'request' ? entry.what : entry.kind}</td>
+            <td>
+              {#if entry.kind !== 'request'}
+                {humanize(entry.what)}
+              {:else if !entry.ok}
+                <State said={outcome('refused')} />
+              {/if}
+            </td>
+            <td>{entry.repo ?? ''}</td>
+          </tr>
+        {:else}
+          <tr>
+            <td colspan="5">
+              {#if narrowed}
+                <Empty inset title="Nothing matches">Nothing the log keeps fits this search.</Empty>
+              {:else}
+                <Empty inset title="Nothing in the log yet">
+                  {requests ? 'Each request is written here as it is answered.' : 'What changes the server is written here as it happens.'}
+                </Empty>
+              {/if}
+            </td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
   </div>
+  {#if entries.length >= LIMIT}
+    <p class="footnote">These are the latest {LIMIT}: narrow the search to see what came before them.</p>
+  {/if}
 {/if}
-
-<style>
-  .filters {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-    padding: 12px;
-    margin: 0 0 16px;
-  }
-  .filters .check {
-    margin-right: 4px;
-  }
-  .log td b {
-    font-weight: 600;
-  }
-  .refused td {
-    color: var(--bad);
-  }
-</style>

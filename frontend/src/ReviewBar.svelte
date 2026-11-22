@@ -1,17 +1,28 @@
 <script>
-  // The review being written, always at hand while the lane is read: its
-  // comments waiting to be sent, a word for the lane as a whole, and the
-  // verdict that sends them all (Kito 0.38). Beside it: where the review
-  // and the checks stand, and integrating.
-  import { ask } from './api.js';
+  // The review being written, always at hand while the lane is read:
+  // where the lane stands, the verdict that sends its comments in one go
+  // (Kito 0.38), and integrating. Opened, it holds a word for the lane
+  // as a whole.
+  import { ask, focus } from './api.js';
+  import { count, laneName } from './format.js';
+  import { lacking } from './standing.js';
+  import Err from './Err.svelte';
+  import Icon from './Icon.svelte';
+  import State from './State.svelte';
+  import { toast } from './toast.svelte.js';
+  import { shell } from './shell.svelte.js';
 
+  // `info`: the lane as the repository has it; `stops`: how many checks
+  // stop it, listed at `checks`; `mayIntegrate`: integrating is for who
+  // reads this (anybody else who asks leaves the lane merged, checked,
+  // and waiting for them).
   let {
     lane,
+    info,
     drafts,
     review,
     stops = 0,
     user = null,
-    owner = null,
     mayIntegrate = false,
     integrating = false,
     sent,
@@ -21,193 +32,180 @@
 
   let open = $state(false);
   let text = $state('');
-  let busy = $state(false);
+  // The verdict being sent, while it is.
+  let busy = $state('');
   let failed = $state('');
 
-  const mine = $derived(review.verdicts.some((verdict) => user === null || verdict.by === user));
-  const own = $derived(user !== null && owner === user);
+  let name = $derived(laneName(info.name ?? info.id));
+  const theirs = (verdict) => user === null || verdict.by === user;
+  let mine = $derived(review.verdicts.some(theirs));
+  // A lane that is for them: its review is somebody else's.
+  let own = $derived(user !== null && info.owner === user);
+  // Their approval, of the lane as it is now.
+  let approved = $derived(review.verdicts.some((verdict) => theirs(verdict) && verdict.verdict === 'approved' && !verdict.stale));
+  let canSay = $derived(drafts.length > 0 || text.trim() !== '');
+  // What there is to do first: integrate a lane nothing stops, or give
+  // the approval it lacks.
+  let next = $derived(
+    mayIntegrate && stops === 0 && !review.missing ? 'integrate' : !own && !approved && lacking(info) > 0 ? 'approve' : '',
+  );
 
   async function send(verdict) {
-    busy = true;
+    busy = verdict;
     failed = '';
     try {
+      const words = text.trim();
       await ask('submit_review', {
         lane,
         verdict,
-        text: text.trim() || null,
+        text: words || null,
         comments: drafts.map((draft) => ({
           on: draft.on,
           text: draft.text,
           ...(draft.suggestion != null ? { suggestion: draft.suggestion } : {}),
         })),
       });
+      if (verdict === 'approve') toast(`Approved ${name}`);
+      else if (verdict === 'request_changes') toast(`Changes requested on ${name}`);
+      else toast(`${count(drafts.length + (words ? 1 : 0), 'comment')} added`);
       text = '';
       open = false;
       await sent();
     } catch (error) {
       failed = error.message;
     } finally {
-      busy = false;
+      busy = '';
     }
   }
 
   async function withdraw() {
-    busy = true;
+    busy = 'withdraw';
     failed = '';
     try {
       await ask('verdict', { lane, verdict: 'withdraw' });
+      toast('Verdict withdrawn');
       await sent(false);
     } catch (error) {
       failed = error.message;
     } finally {
-      busy = false;
+      busy = '';
     }
   }
 
-  const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-  let canComment = $derived(drafts.length > 0 || text.trim().length >= 2);
+  // How tall it is, said to the shell: what is said for a moment stands over it.
+  let height = $state(0);
+  $effect(() => {
+    shell.foot = height;
+    return () => (shell.foot = 0);
+  });
 </script>
 
-<div class="bar" class:open role="region" aria-label="Your review">
+<!-- First in its row when it is what there is to do, last when it is not. -->
+{#snippet integrateButton()}
+  <button class={[next === 'integrate' && 'primary']} disabled={integrating || stops > 0} onclick={integrate}>
+    {integrating ? 'Integrating…' : 'Integrate'}
+  </button>
+{/snippet}
+
+<div class={['panel', 'bar', open && 'open']} role="region" aria-label="Your review" bind:clientHeight={height}>
   {#if open}
-    <textarea
-      bind:value={text}
-      placeholder="A word on the lane as a whole: what should change, or why it is good. Its agent is told with the comments."
-      aria-label="Your review of the lane"
-    ></textarea>
+    <label class="field">
+      <span>Your review</span>
+      <textarea bind:value={text} use:focus></textarea>
+      <span class="hint">
+        What should change, or why it is good: the lane’s agent is told{#if drafts.length > 0}, with the
+          {count(drafts.length, 'comment')} left on its lines{/if}.
+      </span>
+    </label>
   {/if}
-  <div class="row">
-    <button class="bare toggle" onclick={() => (open = !open)} aria-expanded={open}>
-      <b>Your review</b>
-      {#if drafts.length > 0}<span class="pending">{count(drafts.length, 'comment', 'comments')} waiting</span>{/if}
-      <span class="caret">{open ? '▾' : '▴'}</span>
-    </button>
-    <span class="state">
-      {#if review.missing}
-        <span class="chip warn">{review.missing}</span>
-      {:else if review.approved_by.length > 0}
-        <span class="chip ok">approved by {review.approved_by.join(', ')}</span>
-      {:else if review.verdicts.some((verdict) => verdict.verdict === 'changes_requested')}
-        <span class="chip bad">changes requested</span>
-      {/if}
+  <div class="line">
+    <div class="stands">
+      <State lane={info} />
       {#if stops > 0}
-        <a class="chip bad" href={checks}>{count(stops, 'thing stands', 'things stand')} in its way</a>
+        <span class="hint"><a href={checks}>{count(stops, 'check stops', 'checks stop')} it</a></span>
       {/if}
-    </span>
-    <span class="grow"></span>
-    <span class="actions">
-      <button disabled={busy || !canComment} onclick={() => send('comment')}>Comment</button>
-      <button disabled={busy || (!canComment && !open)} onclick={() => (open && canComment ? send('request_changes') : (open = true))}
-        >Request changes</button
-      >
+    </div>
+    <div class="buttons">
+      {#if next === 'integrate'}{@render integrateButton()}{/if}
+      {#if !own}
+        <button class={[next === 'approve' && 'primary']} disabled={busy !== ''} onclick={() => send('approve')}>
+          {busy === 'approve' ? 'Approving…' : 'Approve'}
+        </button>
+      {/if}
       <button
-        class="primary"
-        disabled={busy || own}
-        title={own ? 'The approval of the lane’s owner does not count' : ''}
-        onclick={() => send('approve')}>Approve</button
+        class="more"
+        disabled={busy !== '' || (open && !canSay)}
+        onclick={() => (open && canSay ? send('request_changes') : (open = true))}
       >
-      {#if mine}<button class="quiet" disabled={busy} onclick={withdraw}>Withdraw</button>{/if}
-      {#if mayIntegrate}
-        <span class="sep" aria-hidden="true"></span>
-        <button class="go" disabled={integrating} onclick={integrate}>{integrating ? 'Integrating…' : 'Integrate'}</button>
+        {busy === 'request_changes' ? 'Requesting…' : 'Request changes'}
+      </button>
+      <button class="more" disabled={busy !== '' || (open && !canSay)} onclick={() => (canSay ? send('comment') : (open = true))}>
+        {busy === 'comment' ? 'Commenting…' : 'Comment'}
+      </button>
+      {#if mine}
+        <button class="quiet more" disabled={busy !== ''} onclick={withdraw}>{busy === 'withdraw' ? 'Withdrawing…' : 'Withdraw'}</button>
       {/if}
-    </span>
+      {#if next !== 'integrate'}{@render integrateButton()}{/if}
+    </div>
+    <button
+      class="quiet"
+      aria-expanded={open}
+      aria-label={drafts.length > 0 ? `Your review, ${count(drafts.length, 'comment')} waiting` : 'Your review'}
+      onclick={() => (open = !open)}
+    >
+      {#if drafts.length > 0}<span class="count accent">{drafts.length}</span>{/if}
+      <Icon name={open ? 'chevron-down' : 'chevron-up'} />
+    </button>
   </div>
-  {#if failed}<p class="error" role="alert">{failed}</p>{/if}
+  <Err message={failed} />
 </div>
 
 <style>
+  /* Stays at the foot of the window while the lane is read. */
   .bar {
     position: sticky;
     bottom: 0;
     z-index: 10;
-    margin-top: 16px;
-    padding: 10px 16px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 8px 8px 0 0;
-    box-shadow: 0 -4px 16px rgba(16, 16, 32, 0.08);
-  }
-  textarea {
-    width: 100%;
-    box-sizing: border-box;
-    min-height: 70px;
-    margin-bottom: 8px;
-  }
-  .row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px;
-  }
-  .toggle {
-    display: inline-flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
+    margin-top: 16px;
+    padding: 12px var(--pad-panel);
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    box-shadow: var(--raise-shadow);
+  }
+  .line,
+  .stands,
+  .buttons {
+    display: flex;
     align-items: center;
-    min-height: var(--control);
-    color: var(--ink);
-    font-size: 13px;
-    cursor: pointer;
-  }
-  .pending {
-    display: inline-flex;
-    align-items: center;
-    height: 20px;
-    padding: 0 8px;
-    border-radius: 999px;
-    background: var(--accent-wash);
-    color: var(--accent);
-    font-size: 12px;
-    font-weight: 500;
-  }
-  .caret {
-    color: var(--faint);
-    font-size: 11px;
-  }
-  .state {
-    display: inline-flex;
-    gap: 6px;
+    gap: 8px;
     flex-wrap: wrap;
   }
-  .state a:hover {
-    text-decoration: none;
+  .stands {
+    flex: 1 1 auto;
   }
-  .grow {
-    flex: 1;
+  /* Where one row does not hold it all, two: where the lane stands and
+     the way into the review, then what is pressed. */
+  @media (max-width: 900px) {
+    .line {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+    .buttons {
+      grid-row: 2;
+      grid-column: 1 / -1;
+    }
   }
-  .actions {
-    display: inline-flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    align-items: center;
-  }
-  .sep {
-    width: 1px;
-    height: 20px;
-    background: var(--line);
-    margin: 0 4px;
-  }
-  .go {
-    background: var(--ok);
-    border-color: var(--ok);
-    color: var(--panel);
-  }
-  .go:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--ok) 88%, var(--ink));
-  }
-  .error {
-    margin: 8px 0 0;
-  }
+  /* On a phone the second row is what is pressed first, as wide as the
+     screen; the rest of the review is behind the way in. */
   @media (max-width: 640px) {
-    .bar {
-      margin-inline: -14px;
-      border-radius: 0;
-    }
-    .actions {
-      width: 100%;
-    }
-    .actions button {
+    .buttons button {
       flex: 1;
+    }
+    .bar:not(.open) .more {
+      display: none;
     }
   }
 </style>

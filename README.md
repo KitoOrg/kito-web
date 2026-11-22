@@ -8,7 +8,7 @@ Kito: it asks the repository's daemon what `kito` asks, through the
 daemon's API (version 1, `docs/api.md` in Kito), within the permissions
 the repository gives it. Nothing of Kito is linked into it.
 
-## What it does (0.18)
+## What it does (0.19)
 
 - **The lanes** of a repository, as a list: where each stands, whose it
   is, what it declared, which other lanes are on the same code. The
@@ -114,7 +114,8 @@ kito-server serve --http 0.0.0.0:7443     # https://<the server>:7443/
 
 - Whoever opens the address **signs in**: in one of the ways the
   server's plugins offer (`kito-github`, `kito-oidc`), or with the token
-  the server gave them.
+  the server gave them. A way that is not set up yet is not offered
+  (Kito 0.39.1).
 - They land on **what needs them**, across the repositories they may
   use: conflicts to decide, lanes of theirs that were asked to change,
   lanes that wait for their review, or for somebody who may integrate
@@ -173,10 +174,9 @@ kito-server serve --http 0.0.0.0:7443     # https://<the server>:7443/
   log's chain is whole; the backups here and in S3, one made now, one
   downloaded.
 - **GitHub** in a repository's Settings (kito-github 0.4, Kito 0.39):
-  the repository at GitHub it is kept in step with, the branch of its
-  main lane, code and issues on or off, how the last sync went, Sync now;
-  and **Create GitHub App** for administrators, there and on the Plugins
-  page.
+  the repository at GitHub it is linked to, the branch of its main lane,
+  code and issues on or off, how the last sync went, Sync now. The
+  server's GitHub App is made once, by an admin, on the Plugins page.
 - **Review in the diff** (Kito 0.38): comments on lines wait as a
   draft and go out with the verdict in one review; a comment may suggest
   the lines to put in place, applied with one click or by the agent;
@@ -212,6 +212,7 @@ two repositories, and serves it on this machine.
 
 ```bash
 cd frontend && npm run dev          # the client alone, asking a running `kito web`
+cd frontend && npm run lint         # the rules of its look (every build runs it first)
 cargo test                          # needs Kito built in ../kito, or KITO_BIN
 ```
 
@@ -226,6 +227,17 @@ where a lane stands, and are not the brand's. The typeface is
 [Geist](https://vercel.com/font) and Geist Mono (Vercel, SIL Open Font
 License 1.1, in `licenses/`), and Chart.js (MIT, in `licenses/`), carried with the client: a browser that
 opens it asks nothing of anybody else.
+
+Every page is made of the same few things and says a thing the same
+way ([frontend/UI.md](frontend/UI.md) is the rules). One stylesheet (`frontend/src/app.css`) holds the sizes of text,
+the colours, the controls and the surfaces; the head of a page, the
+question before something that cannot be undone, an error, a time and
+where a lane or a task stands are one component each; how values and
+states are worded is in `format.js` and `standing.js`. A chip says where
+a thing stands, in a few words, and nothing else. `npm run lint` checks
+what a program can check of this, and every build runs it first: a page
+that sets a size or a colour of its own, words a state by hand or opens
+a native dialog stops the build.
 
 ## License
 
