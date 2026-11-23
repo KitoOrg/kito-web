@@ -37,6 +37,8 @@
 
   // The reasons of this lane itself are what is being reviewed: said, and set apart.
   const own = (reason) => reason.lane === id && !reason.checkpoint;
+  // What another lane was for, under a reason it gave of its own (Kito 0.42); this lane's is at the head of the page.
+  const under = (reason) => (reason.explained && !own(reason) ? (reason.intent ?? null) : null);
   const others = (graph) => (graph.in_progress ?? []).filter((other) => other.lane !== id);
 </script>
 
@@ -63,6 +65,7 @@
           {#each graph.reasons.slice(0, 5) as reason}
             <li class:own={own(reason)}>
               <q class="reason">{reason.why}</q>
+              {#if under(reason)}<span class="small intent"><q class="reason">{under(reason)}</q></span>{/if}
               <span class="small faint">
                 {who(reason.by, reason.for)}
                 {#if reason.checkpoint}
@@ -121,6 +124,10 @@
   }
   .reasons li.own {
     border-color: var(--accent);
+  }
+  /* What the lane was for, on a line of its own under its reason. */
+  .intent {
+    flex-basis: 100%;
   }
   .also {
     padding: 8px var(--pad-panel);

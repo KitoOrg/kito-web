@@ -24,6 +24,7 @@
 
   // What is being edited.
   let approvals = $state(0);
+  let reasons = $state('');
   let push = $state('');
   let checks = $state('');
   let kitchen = $state('');
@@ -44,6 +45,7 @@
   // typed in the others stays.
   function show(rules, only = null) {
     if (only === null || only === 'approvals') approvals = rules.approvals ?? 0;
+    if (only === null || only === 'reasons') reasons = rules.reasons ?? '';
     if (only === null || only === 'push') push = rules.push ?? '';
     if (only === null || only === 'checks') checks = (rules.checks ?? []).join('\n');
     if (only === null || only === 'kitchen') kitchen = named(rules.kitchen);
@@ -74,13 +76,21 @@
       wrong = { [setting]: error.message };
     }
     // What was typed and not saved stays to be corrected; a choice that was not taken goes back.
-    await load(saved || setting === 'kitchen' ? setting : 'nothing');
+    await load(saved || ['kitchen', 'reasons'].includes(setting) ? setting : 'nothing');
     busy = '';
   }
 
   const setProtected = (on) =>
     change('protected', on ? 'Main lane protected' : 'Main lane no longer protected', () => ask('protect', { on }));
   const saveApprovals = () => change('approvals', 'Approvals saved', () => ask('configure', { approvals: Number(approvals) || 0 }));
+  // What the repository asks of the reasons of each change (Kito 0.42): each choice, and what it does.
+  const RULES = [
+    ['required', 'Required', 'Approving and integrating wait until each change says why.'],
+    ['asked', 'Asked', 'Agents are asked; nothing waits.'],
+    ['off', 'Off', 'Nothing is asked.'],
+  ];
+  const saveReasons = (rule) =>
+    change('reasons', `Reasons ${RULES.find(([value]) => value === rule)?.[1].toLowerCase() ?? rule}`, () => ask('configure', { reasons: rule }));
   const savePush = () => change('push', 'Git push saved', () => ask('configure', { push: push.trim() || null }));
   const saveChecks = () =>
     change('checks', 'Check commands saved', () =>
@@ -169,6 +179,21 @@
         {#snippet history()}{@render changed('approvals')}{/snippet}
       </SettingCard>
 
+      {#if now.reasons !== undefined}
+        <SettingCard title="Reasons" about="A reason of its own for each function or file a lane changes.">
+          <div class="choices" role="radiogroup" aria-label="Reasons">
+            {#each RULES as [value, label, does] (value)}
+              <label class="check">
+                <input type="radio" name="reasons" {value} bind:group={reasons} disabled={busy !== ''} onchange={() => saveReasons(value)} />
+                <span>{label} <span class="hint">{does}</span></span>
+              </label>
+            {/each}
+          </div>
+          <Err message={wrong.reasons} />
+          {#snippet history()}{@render changed('reasons')}{/snippet}
+        </SettingCard>
+      {/if}
+
       <SettingCard title="Check commands" about="Run on the merged result, one per line.">
         {#if admin}
           <textarea rows="4" class="mono" aria-label="Check commands" placeholder="npm test" bind:value={checks}></textarea>
@@ -251,6 +276,11 @@
 <style>
   .digits {
     width: 88px;
+  }
+  /* The choices of a rule, one under the other. */
+  .choices {
+    display: grid;
+    gap: 6px;
   }
   .remote {
     flex: 1 1 200px;

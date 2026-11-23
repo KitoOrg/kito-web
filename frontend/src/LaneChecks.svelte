@@ -17,7 +17,9 @@
           <span class="soft">{row.text}</span>
           {#if row.items}
             <ul class="items">
-              {#each row.items as item}<li class="mono">{item}</li>{/each}
+              {#each row.items as item}
+                <li class="mono">{#if typeof item === 'string'}{item}{:else if item.href}<a href={item.href}>{item.text}</a>{:else}{item.text}{/if}</li>
+              {/each}
             </ul>
           {/if}
         </div>

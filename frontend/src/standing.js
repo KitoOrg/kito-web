@@ -5,6 +5,7 @@
 // Tones: `ok` (went well, passes, ready), `warn` (waits for somebody),
 // `bad` (stopped until somebody acts), `done` (over), `accent` (under
 // way), or none (nothing to say of it).
+import { count } from './format.js';
 
 /** The approvals a lane still lacks ("0 of 1 approval": 1); 0 when it needs none, or has them. */
 export function lacking(lane) {
@@ -133,3 +134,14 @@ export function checksStanding(checks) {
 
 /** What the ring before a check of a lane means, for whoever cannot see it. */
 export const CHECK_WORDS = { ok: 'passes', warn: 'needs a look', bad: 'stops it', '': 'nothing to pass' };
+
+// A reason of its own for each change (Kito 0.42).
+
+/** A change its lane has not said why for yet: it waits for its agent, or for whoever writes in the lane. */
+export const NO_REASON = { text: 'no reason yet', tone: 'warn' };
+
+/** What a lane still has to say why for, in a few words: `2 changes have no reason yet`. */
+export const noReason = (n) => `${count(n, 'change has', 'changes have')} no reason yet`;
+
+/** The same, among the facts of a lane in a list: `2 without a reason`. */
+export const withoutReason = (n) => `${n} without a reason`;

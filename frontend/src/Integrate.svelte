@@ -3,15 +3,17 @@
   // and what came of it. Integrated, it is said in passing; anything else
   // stays under the head of the page, with what there is to do about it.
   import { ask } from './api.js';
+  import { heldFor } from './checks.js';
   import { count, laneName } from './format.js';
-  import { outcome, standing } from './standing.js';
+  import { noReason, outcome, standing } from './standing.js';
   import Err from './Err.svelte';
   import Icon from './Icon.svelte';
   import State from './State.svelte';
   import { toast } from './toast.svelte.js';
 
-  // `talk`: the address of the part of the page where conflicts are decided.
-  let { lane, info, changed, talk } = $props();
+  // `talk`: the address of the part of the page where conflicts are
+  // decided; `checks`: of the one that lists what has no reason yet.
+  let { lane, info, changed, talk, checks } = $props();
 
   // What is waited for, while it is.
   let waiting = $state('');
@@ -41,7 +43,10 @@
         result = ended;
       }
     } catch (error) {
-      failed = error.message;
+      // Held for its reasons (Kito 0.42): what has none is said, not what the server tells its agent.
+      const left = await heldFor(lane, error);
+      failed = left > 0 ? `Not integrated: ${noReason(left)}.` : error.message;
+      if (left > 0) await changed();
     } finally {
       waiting = '';
     }
@@ -83,6 +88,8 @@
           {:else}
             Merged and checked: it waits for somebody who may integrate.
           {/if}
+        {:else if result.unexplained?.length > 0}
+          Not integrated: <a href={checks}>{noReason(result.unexplained.length)}</a>.
         {:else if result.result === 'nothing_to_integrate'}
           {info.target ?? 'main'} already has everything this lane has.
         {:else}

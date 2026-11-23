@@ -84,6 +84,8 @@ const WRITES: &[&str] = &[
     "remove_note",
     "open_lane",
     "close_lane",
+    // Why a change was made, said by a person for a lane they may write in.
+    "explain",
     "request_integration",
     "resolve_conflict",
     "task_add",

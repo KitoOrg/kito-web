@@ -3,7 +3,7 @@
   // stands, whose it is, what it is on.
   import { ask, focus, laneLink, watch } from './api.js';
   import { count, laneName, laneTitle, scopeItems, sentence, tasked, who } from './format.js';
-  import { LANE_PLACES, placeWords, sameCode, standing } from './standing.js';
+  import { LANE_PLACES, placeWords, sameCode, standing, withoutReason } from './standing.js';
   import Assistant from './Assistant.svelte';
   import Empty from './Empty.svelte';
   import Ended from './Ended.svelte';
@@ -43,6 +43,8 @@
           last: seen?.last_change_ms ?? 0,
           overlaps: sameCode(seen?.overlaps),
           out_of_scope: lane.out_of_scope ?? seen?.out_of_scope ?? [],
+          // What it changed without saying why (Kito 0.42).
+          unexplained: lane.unexplained ?? seen?.unexplained ?? [],
         };
       });
       // A place no lane stands in any more is no choice: back to all of them.
@@ -216,6 +218,7 @@
             {/if}
             {#if lane.overlaps?.length > 0}<span class="tag">same code as {lane.overlaps.join(', ')}</span>{/if}
             {#if lane.out_of_scope?.length > 0 && stands.place !== 'outside'}<span class="tag">{placeWords('outside')}</span>{/if}
+            {#if lane.state !== 'closed' && lane.unexplained?.length > 0}<span class="tag">{withoutReason(lane.unexplained.length)}</span>{/if}
             <State {lane} plain />
           </span>
         </a>

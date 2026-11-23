@@ -47,6 +47,8 @@ kito checkpoint -m "first version" >/dev/null
 # Something already went in through a lane, and a note was left on the code.
 kito lane open carol --intent "say what the shop takes off" --scope README.md >/dev/null
 printf '# Shop\n\nPrices, and the discounts taken off them.\n' > "$APP/.kito/lanes/1/work/README.md"
+# Each change says why (Kito 0.42 holds a lane that does not; an older Kito has no `explain`).
+kito explain README.md --lane 1 -m "Readers took what is taken off for taxes: it says discounts." >/dev/null 2>&1 || true
 kito integrate 1 >/dev/null
 kito lane close 1 >/dev/null
 kito note src/shop.ts:total "Called by the nightly billing job, outside this repository: do not rename." >/dev/null
@@ -76,6 +78,7 @@ TS
 kito lane open dana --intent "prices rounded to whole units" --scope src/shop.ts:total >/dev/null
 WORK4="$APP/.kito/lanes/4/work"
 sed -i.bak 's/sum += price;/sum += Math.round(price);/' "$WORK4/src/shop.ts" && rm "$WORK4/src/shop.ts.bak"
+kito explain src/shop.ts:total --lane 4 -m "Rounded per price, not on the sum: the till rounds each line, and the two must agree." >/dev/null 2>&1 || true
 kito integrate 4 >/dev/null
 kito lane close 4 >/dev/null
 

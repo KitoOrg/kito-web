@@ -51,6 +51,8 @@ kito checkpoint -m "first version" >/dev/null
 # Something already went in through a lane, and a note was left on the code.
 kito lane open carol --intent "say what the shop takes off" --scope README.md >/dev/null
 printf '# Shop\n\nPrices, and the discounts taken off them.\n' > "$APP/.kito/lanes/1/work/README.md"
+# Each change says why (Kito 0.42 holds a lane that does not; an older Kito has no `explain`).
+kito explain README.md --lane 1 -m "Readers took what is taken off for taxes: it says discounts." >/dev/null 2>&1 || true
 kito integrate 1 >/dev/null
 kito lane close 1 >/dev/null
 kito note src/shop.ts:total "Called by the nightly billing job, outside this repository: do not rename." >/dev/null
@@ -69,8 +71,11 @@ kito lane request-changes 2 "See the comment on line 4." >/dev/null
 kito lane open gus --intent "prices rounded to whole units" --scope src/shop.ts:total --assistant codex >/dev/null
 WORK="$APP/.kito/lanes/3/work"
 sed -i.bak 's/sum += price;/sum += Math.round(price);/' "$WORK/src/shop.ts" && rm "$WORK/src/shop.ts.bak"
+kito explain src/shop.ts:total --lane 3 -m "Rounded per price, not on the sum: the till rounds each line, and the two must agree." >/dev/null 2>&1 || true
 kito integrate 3 >/dev/null
 kito lane close 3 >/dev/null
+# Alice's agent said why for the function, and not yet for the README.
+kito explain src/shop.ts:total --lane 2 -m "Whole cents: as fractions a long cart lost a cent." >/dev/null 2>&1 || true
 kito integrate 2 >/dev/null 2>&1 || true
 
 # The other repository has its own work in progress.
@@ -159,5 +164,6 @@ bob open_lane '{"agent":"erin","intent":"a discount never takes more than the pr
 WORK="$APP/.kito/lanes/5/work"
 sed -i.bak 's|return amount - (amount \* percent) / 100;|return Math.max(0, amount - (amount * percent) / 100);|' "$WORK/src/shop.ts" && rm "$WORK/src/shop.ts.bak"
 kito --repo "$APP" sync >/dev/null
+bob explain '{"lane":"lane/5","reasons":[{"on":"src/shop.ts:discount","why":"A discount above 100 percent made a negative price, which the till refuses."}]}'
 bob request_integration '{"lane":"lane/5"}'
 wait "$SERVING"

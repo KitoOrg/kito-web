@@ -222,7 +222,7 @@
   const done = (item) => item.detail ?? opName(item.op);
 
   // ---- Writing a file of the kitchen: through a lane, as code is.
-  // What the lane is for, as whoever writes says it.
+  // Why the file is changed, as whoever writes says it: the reason of the change.
   let why = $state('');
   // Where a save stands while it is made, and what came of one that was not integrated.
   let progress = $state('');
@@ -251,7 +251,8 @@
     try {
       const made = await changeIn(k, {
         agent: who.user,
-        intent: why.trim() || `${isNew ? 'Write' : 'Change'} ${path} of the kitchen`,
+        intent: `${isNew ? 'Write' : 'Change'} ${path} of the kitchen`,
+        why: why.trim(),
         files: [[path, text, blob]],
         integrate: mayIntegrateIn(k),
         waiting: (now) => (progress = now),
@@ -468,7 +469,7 @@
               {#snippet fields()}
                 <label class="field">
                   <span>Why</span>
-                  <input bind:value={why} placeholder={`${open?.fresh ? 'Write' : 'Change'} ${open?.path} of the kitchen`} />
+                  <input bind:value={why} maxlength="500" placeholder="Agents skipped this step when it came last" />
                 </label>
               {/snippet}
             </Editor>
@@ -514,7 +515,9 @@
             {#each history as item (item.id)}
               <tr>
                 <td>{item.author}</td>
-                <td>{#if item.intent}<q class="reason">{item.intent}</q>{:else}{humanize(done(item))}{/if}</td>
+                <td>
+                  {#if item.reason ?? item.intent}<q class="reason">{item.reason ?? item.intent}</q>{:else}{humanize(done(item))}{/if}
+                </td>
                 <td>
                   {#if !item.lane}
                     <span class="none">None</span>

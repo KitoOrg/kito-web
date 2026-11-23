@@ -41,6 +41,8 @@
   let seen = $state(null);
   // What the repository runs on a merged result.
   let commands = $state([]);
+  // Its rule for the reasons of each change (Kito 0.42): `required`, `asked`, `off`; null from an older one.
+  let reasons = $state(null);
   let resolved = $state(false);
   let failed = $state('');
   // A lane that is closed, where the server answers nothing else of it
@@ -160,6 +162,7 @@
     missing = { diff: changes === null ? diffFailed : '', said: said === null ? saidFailed : '', review: stands === null ? standsFailed : '' };
     seen = (board ?? []).find((one) => one.id === status.id) ?? null;
     commands = repository?.repo?.checks ?? [];
+    reasons = repository?.repo?.reasons ?? null;
     // What a closed lane integrated does not change: asked once.
     if (over && !keeping) {
       keeping = true;
@@ -257,7 +260,14 @@
     return [...found.values()];
   });
 
-  let rows = $derived(info && diff && review ? checksOf({ info, diff, review, checks: commands, conflicts }) : []);
+  // What it changed and has not said why for yet: an open lane's, under a rule that asks.
+  let unexplained = $derived(ended || !reasons || reasons === 'off' ? [] : (info?.unexplained ?? []));
+  // Where a change is shown in the Changes: a function's file, or the file.
+  const placeOf = (on) => `${here('changes')}&at=${encodeURIComponent(on)}`;
+
+  let rows = $derived(
+    info && diff && review ? checksOf({ info, diff, review, checks: commands, conflicts, reasons: ended ? null : reasons, placeOf }) : [],
+  );
   let stops = $derived(ended ? keptRows.reduce((sum, group) => sum + stopping(group.rows), 0) : stopping(rows));
   // The other lanes on the very same code, each said once: by the
   // function both are on rather than by one that calls it.
@@ -280,9 +290,13 @@
   let part = $derived(parts.some(([name]) => name === tab) ? tab : 'conversation');
 
   $effect(() => {
-    // From a comment to the file it is on.
+    // From a comment to the file it is on; from the Checks to a change
+    // with no reason yet, or to its file when that is folded.
     if (part !== 'changes' || !at || !diff || (ended && kept === null)) return;
-    queueMicrotask(() => document.getElementById(`file-${at}`)?.scrollIntoView({ block: 'start' }));
+    const file = diff.files.find((one) => at.startsWith(`${one.path}:`))?.path ?? at;
+    queueMicrotask(() =>
+      (document.getElementById(`reason-${at}`) ?? document.getElementById(`file-${file}`))?.scrollIntoView({ block: 'start' }),
+    );
   });
 
   // Whether who is signed in gave a verdict: then they may see what changed since.
@@ -378,7 +392,7 @@
   </PageHead>
   <Err message={closeFailed} />
   {#if mayChange}
-    <Integrate bind:this={integrator} {lane} {info} changed={load} talk={here('conversation')} />
+    <Integrate bind:this={integrator} {lane} {info} changed={load} talk={here('conversation')} checks={here('checks')} />
   {/if}
   <Err message={failed} />
 
@@ -559,6 +573,8 @@
       {drafts}
       {review}
       {stops}
+      unexplained={unexplained.length}
+      holds={reasons === 'required'}
       {user}
       {mayIntegrate}
       {integrating}

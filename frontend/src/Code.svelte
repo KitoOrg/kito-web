@@ -370,6 +370,8 @@
             {#if asked}
               {@const inFunction = inside(line)}
               <p><q class="reason">{asked.why}</q></p>
+              <!-- A reason given for this change (Kito 0.42): what its lane was for, under it. -->
+              {#if asked.explained && asked.intent}<p class="small"><q class="reason">{asked.intent}</q></p>{/if}
               <p class="small soft">
                 {who(asked.by, asked.for)}{#if asked.how?.length > 0}&nbsp;· {asked.how.join(', ')}{/if}{#if asked.lane}&nbsp;· <a class="ref" href={laneLink(asked.lane)}>{laneName(asked.lane)}</a>{/if}
                 · {#if asked.checkpoint}{@render checkpoint(asked.checkpoint)}{:else}not integrated yet{/if}
@@ -395,6 +397,7 @@
             >
               <span class="row-body">
                 <span class="row-title"><q class="reason">{reason.why}</q></span>
+                {#if reason.explained && reason.intent}<span class="row-meta"><q class="reason">{reason.intent}</q></span>{/if}
                 <span class="row-meta">
                   {who(reason.by, reason.for)}{#if reason.checkpoint}&nbsp;· <span class="ref">{reason.checkpoint}</span>{:else if reason.lane}&nbsp;· <span class="ref">{laneName(reason.lane)}</span>{/if}
                   · <Time ms={reason.at_ms} />

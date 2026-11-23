@@ -1,7 +1,9 @@
 // What stands between a lane and the lane it is integrated into, as far
 // as can be said before it asks: each thing with a tone (`ok`, `warn`,
 // `bad`, or nothing when there is nothing to pass) and a sentence.
+import { ask } from './api.js';
 import { count, span } from './format.js';
+import { noReason } from './standing.js';
 
 /**
  * What a checkpoint kept of how a lane was let through (Kito 0.41), in
@@ -30,9 +32,12 @@ export function keptOf(point) {
  * `info`: the lane; `diff`: what it changes; `review`: where its review
  * stands; `checks`: the commands the repository runs on a merged result;
  * `conflicts`: those no integration applied a decision to yet. A row may
- * carry `items`: what its sentence is about, as it is typed.
+ * carry `items`: what its sentence is about, as it is typed (each a
+ * string, or `{ text, href }` where it has a place to go to). `reasons`:
+ * the repository's rule for the reasons of each change (Kito 0.42), none
+ * from an older one; `placeOf`: where a change that has none is shown.
  */
-export function checksOf({ info, diff, review, checks, conflicts }) {
+export function checksOf({ info, diff, review, checks, conflicts, reasons = null, placeOf = () => null }) {
   const onto = diff?.onto ?? 'main';
   const rows = [];
 
@@ -63,6 +68,21 @@ export function checksOf({ info, diff, review, checks, conflicts }) {
       : { name: 'Scope', tone: 'ok', text: 'Nothing was changed outside its scope.' },
   );
 
+  // What it changed without saying why: held under `required`, asked under `asked`.
+  if (reasons && reasons !== 'off') {
+    const left = info.unexplained ?? [];
+    rows.push(
+      left.length === 0
+        ? { name: 'Reasons', tone: 'ok', text: 'Every change says why.' }
+        : {
+            name: 'Reasons',
+            tone: reasons === 'required' ? 'bad' : 'warn',
+            text: reasons === 'required' ? `${noReason(left.length)}: it is not approved or integrated until each has one.` : `${noReason(left.length)}.`,
+            items: left.map((on) => ({ text: on, href: placeOf(on) })),
+          },
+    );
+  }
+
   const said = review?.verdicts?.length > 0;
   if (review?.changes_requested_by?.length > 0) {
     rows.push({ name: 'Review', tone: 'bad', text: `Changes requested by ${review.changes_requested_by.join(', ')}.` });
@@ -88,3 +108,18 @@ export function checksOf({ info, diff, review, checks, conflicts }) {
 
 /** How many of them stop the lane, or will. */
 export const stopping = (rows) => rows.filter((row) => row.tone === 'bad').length;
+
+/**
+ * How many changes of `lane` have no reason yet, when `error` is the
+ * server refusing it for that (`-32020`, Kito 0.42): asked of the lane
+ * again, since the refusal is written for its agent. 0: it is not why.
+ */
+export async function heldFor(lane, error) {
+  if (error?.code !== -32020) return 0;
+  try {
+    const status = await ask('lane_status', { lane });
+    return status.unexplained?.length ?? 0;
+  } catch {
+    return 0;
+  }
+}

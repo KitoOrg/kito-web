@@ -1,9 +1,10 @@
 <script>
-  // What a lane did to one file: its functions, its lines, and what was
-  // said on them.
+  // What a lane did to one file: its functions, its lines, why each
+  // change was made (Kito 0.42), and what was said on them.
   import { untrack } from 'svelte';
   import { codeLink, focus, whyLink } from './api.js';
   import { markViewed, viewedAs } from './review.js';
+  import ChangeReason from './ChangeReason.svelte';
   import Confirm from './Confirm.svelte';
   import Icon from './Icon.svelte';
   import Thread from './Thread.svelte';
@@ -14,6 +15,11 @@
   // checkpoint changed (Kito 0.41), the file shown as it was then.
   // `viewing`: it can be marked as viewed, where something is reviewed.
   let { lane, file, threads, changed, drafts = [], draft = null, undraft = null, mayWrite = true, at = null, viewing = true } = $props();
+
+  // Whoever may write in an open lane says why it changed what has no reason yet.
+  let explains = $derived(mayWrite && Boolean(lane) && !at);
+  // A change its lane said why for, or one waiting to, has its reason where the intents were (Kito 0.42).
+  const reasoned = (change) => Boolean(change.why) || Boolean(change.unexplained);
 
   // Where the file and its functions are read: at the checkpoint, or as the lane has them.
   let fileHref = $derived(at ? codeLink(file.path, { at }) : whyLink(file.path, lane));
@@ -105,10 +111,15 @@
   </div>
 
   {#if !viewed}
+    {#if reasoned(file)}
+      <div class="whole" id={file.unexplained ? `reason-${file.path}` : undefined}>
+        <ChangeReason {lane} on={file.path} why={file.why} unexplained={file.unexplained} may={explains} {changed} />
+      </div>
+    {/if}
     {#if file.symbols?.length > 0}
       <ul class="symbols">
         {#each file.symbols as symbol (symbol.symbol)}
-          <li>
+          <li id={symbol.unexplained ? `reason-${symbol.symbol}` : undefined}>
             <span class="tag change">{symbol.change}</span>
             {#if symbol.change === 'removed'}
               <span class="ref">{name(symbol)}</span>
@@ -117,9 +128,15 @@
             {/if}
             {#if symbol.lines}<span class="small faint">{where(symbol)}</span>{/if}
             {#if symbol.was}<span class="small soft">was <span class="mono">{symbol.was}</span></span>{/if}
-            {#each symbol.intents ?? [] as intent}
-              <q class="reason">{intent}</q>
-            {/each}
+            {#if symbol.why && symbol.why === file.why}
+              <!-- The file's reason, which covers it: said once, on the file's line. -->
+            {:else if reasoned(symbol)}
+              <ChangeReason {lane} on={symbol.symbol} why={symbol.why} unexplained={symbol.unexplained} may={explains} {changed} />
+            {:else}
+              {#each symbol.intents ?? [] as intent}
+                <q class="reason">{intent}</q>
+              {/each}
+            {/if}
           </li>
         {/each}
       </ul>
@@ -232,6 +249,16 @@
   }
   .change {
     min-width: 60px;
+  }
+  /* The reason of the file itself, over those of its functions. */
+  .whole {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 8px;
+    align-items: baseline;
+    padding: 8px var(--pad-panel);
+    border-bottom: 1px solid var(--line);
+    overflow-wrap: anywhere;
   }
   .above {
     display: grid;

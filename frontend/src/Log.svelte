@@ -97,7 +97,8 @@
                       {#if op.lines_added !== null || op.lines_removed !== null}
                         <span class="plus">+{op.lines_added ?? 0}</span> <span class="minus">−{op.lines_removed ?? 0}</span>
                       {/if}
-                      {#if op.intent}<q class="reason">{op.intent}</q>{/if}
+                      <!-- Why this change, when its lane said so (Kito 0.42); else what the lane was for. -->
+                      {#if op.reason ?? op.intent}<q class="reason">{op.reason ?? op.intent}</q>{/if}
                     </div>
                   </div>
                   <span class="row-side"><span class="row-meta">{op.author} · <Time ms={op.at_ms} /></span></span>

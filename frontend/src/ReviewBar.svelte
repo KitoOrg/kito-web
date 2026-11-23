@@ -5,7 +5,8 @@
   // as a whole.
   import { ask, focus } from './api.js';
   import { count, laneName } from './format.js';
-  import { lacking } from './standing.js';
+  import { heldFor } from './checks.js';
+  import { lacking, noReason } from './standing.js';
   import Err from './Err.svelte';
   import Icon from './Icon.svelte';
   import State from './State.svelte';
@@ -15,13 +16,17 @@
   // `info`: the lane as the repository has it; `stops`: how many checks
   // stop it, listed at `checks`; `mayIntegrate`: integrating is for who
   // reads this (anybody else who asks leaves the lane merged, checked,
-  // and waiting for them).
+  // and waiting for them). `unexplained`: how many of its changes have
+  // no reason yet (Kito 0.42); `holds`: the repository holds approving
+  // and integrating until they have one.
   let {
     lane,
     info,
     drafts,
     review,
     stops = 0,
+    unexplained = 0,
+    holds = false,
     user = null,
     mayIntegrate = false,
     integrating = false,
@@ -44,10 +49,13 @@
   // Their approval, of the lane as it is now.
   let approved = $derived(review.verdicts.some((verdict) => theirs(verdict) && verdict.verdict === 'approved' && !verdict.stale));
   let canSay = $derived(drafts.length > 0 || text.trim() !== '');
+  // Nobody approves, nor integrates, what does not say why: said beside them, and not as one of the checks.
+  let held = $derived(holds && unexplained > 0);
+  let others = $derived(stops - (held ? 1 : 0));
   // What there is to do first: integrate a lane nothing stops, or give
   // the approval it lacks.
   let next = $derived(
-    mayIntegrate && stops === 0 && !review.missing ? 'integrate' : !own && !approved && lacking(info) > 0 ? 'approve' : '',
+    mayIntegrate && stops === 0 && !review.missing ? 'integrate' : !own && !approved && !held && lacking(info) > 0 ? 'approve' : '',
   );
 
   async function send(verdict) {
@@ -72,7 +80,10 @@
       open = false;
       await sent();
     } catch (error) {
-      failed = error.message;
+      // Somebody saved meanwhile: what has no reason now is said, not what the server tells its agent.
+      const left = verdict === 'approve' ? await heldFor(lane, error) : 0;
+      failed = left > 0 ? `Not approved: ${noReason(left)}.` : error.message;
+      if (left > 0) await sent(false);
     } finally {
       busy = '';
     }
@@ -118,14 +129,17 @@
   <div class="line">
     <div class="stands">
       <State lane={info} />
-      {#if stops > 0}
-        <span class="hint"><a href={checks}>{count(stops, 'check stops', 'checks stop')} it</a></span>
+      {#if unexplained > 0}
+        <span class="hint"><a href={checks}>{noReason(unexplained)}</a></span>
+      {/if}
+      {#if others > 0}
+        <span class="hint"><a href={checks}>{count(others, 'check stops', 'checks stop')} it</a></span>
       {/if}
     </div>
     <div class="buttons">
       {#if next === 'integrate'}{@render integrateButton()}{/if}
       {#if !own}
-        <button class={[next === 'approve' && 'primary']} disabled={busy !== ''} onclick={() => send('approve')}>
+        <button class={[next === 'approve' && 'primary']} disabled={busy !== '' || held} onclick={() => send('approve')}>
           {busy === 'approve' ? 'Approving…' : 'Approve'}
         </button>
       {/if}

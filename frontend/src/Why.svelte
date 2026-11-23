@@ -124,6 +124,8 @@
                 >
                 <div class="row-body">
                   <span class="row-title"><q class="reason">{reason.why}</q></span>
+                  <!-- A reason given for this change (Kito 0.42): what its lane was for, under it. -->
+                  {#if reason.explained && reason.intent}<span class="row-meta"><q class="reason">{reason.intent}</q></span>{/if}
                   <span class="row-meta">
                     {who(reason.by, reason.for)}{#if reason.how?.length > 0}&nbsp;· {reason.how.join(', ')}{/if}{#if reason.lane}&nbsp;· <a class="ref" href={laneLink(reason.lane)}>{laneName(reason.lane)}</a>{/if}
                     · {#if reason.checkpoint}<span class="ref">{reason.checkpoint}</span>{:else}not integrated yet{/if}

@@ -8,7 +8,7 @@ Kito: it asks the repository's daemon what `kito` asks, through the
 daemon's API (version 1, `docs/api.md` in Kito), within the permissions
 the repository gives it. Nothing of Kito is linked into it.
 
-## What it does (0.22)
+## What it does (0.23)
 
 - **The lanes** of a repository, as a list: where each stands, whose it
   is, what it declared, which other lanes are on the same code. The
@@ -39,6 +39,18 @@ the repository gives it. Nothing of Kito is linked into it.
   what its checkpoint kept of the checks, and why. The list of closed
   lanes says how each ended. With an older Kito a closed lane says only
   that it is closed.
+- **Why each change was made** (Kito 0.42): a changed function or file
+  shows its own reason where it is shown (a lane's changes, a
+  checkpoint's, the code), and the lane's intent only as what that
+  reason was given under. A change with no reason yet says so, and
+  whoever may write in the lane says why there, in a line. While a
+  repository requires reasons, approving and integrating a lane wait
+  until each of its changes has one, and the page says how many are
+  missing instead of offering what would be refused; the checks have a
+  line for it, and the list of lanes says which lanes are waiting. The
+  rule (required, asked, off) is among the repository's settings. The
+  kitchens' editor gives what the person wrote as the reason of the
+  file it saves.
 - **Comments**: on a line of the diff, or on the lane as a whole;
   answers; resolving. The agent working in the lane is told before its
   next edit, as with `kito lane comment`.
