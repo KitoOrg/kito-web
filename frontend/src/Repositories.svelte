@@ -88,8 +88,20 @@
 
   const archive = (repo) => act('archive', 'live', 'server.repo_archive', { name: repo }, `${repo} archived`);
   const restore = (repo) => act('restore', 'archived', 'server.repo_unarchive', { name: repo }, `${repo} restored`);
-  // The server asks for the name again: whoever deletes typed it.
-  const remove = (repo) => act('delete', 'archived', 'server.repo_delete', { name: repo, confirm: repo }, `${repo} deleted`);
+  // The server asks for the name again: whoever deletes typed it. What is
+  // deleted is the archived one, and that is said (Kito 0.39.5). A server
+  // before that does not hear it and deletes the one in use when two have
+  // the name, and this page cannot tell which Kito the server runs: with
+  // two of a name nothing is asked here.
+  function remove(repo) {
+    if (live.has(repo)) {
+      wrong = {
+        archived: `A repository in use is called ${repo} too. Delete the archived one on the server’s machine: kito-server repo delete ${repo} --confirm ${repo} --archived`,
+      };
+      return false;
+    }
+    return act('delete', 'archived', 'server.repo_delete', { name: repo, confirm: repo, archived: true }, `${repo} deleted`);
+  }
 
   // The lanes of a repository: where its name leads.
   const lanesOf = (repo) => `${location.pathname}?repo=${encodeURIComponent(repo)}#/`;
