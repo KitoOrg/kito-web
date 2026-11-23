@@ -8,7 +8,7 @@ Kito: it asks the repository's daemon what `kito` asks, through the
 daemon's API (version 1, `docs/api.md` in Kito), within the permissions
 the repository gives it. Nothing of Kito is linked into it.
 
-## What it does (0.20)
+## What it does (0.22)
 
 - **The lanes** of a repository, as a list: where each stands, whose it
   is, what it declared, which other lanes are on the same code. The
@@ -30,8 +30,15 @@ the repository gives it. Nothing of Kito is linked into it.
   the repository runs before it goes in); and **why** (for each
   function it touched: the reasons before this one, who else is on it
   now, the notes left on it). Beside them: integrating, the review, what
-  it declared, the lanes on the same code, and its agent. A lane that is
-  closed says so, and where to find what it brought in.
+  it declared, the lanes on the same code, and its agent.
+- **A lane that is closed** (Kito 0.41) is read the same way, and
+  nothing in it can be changed: how it ended (integrated into what, as
+  which checkpoint, or closed without integrating; who closed it, when),
+  what it integrated as the changes of each of its checkpoints, what it
+  left that never went in, what was said on it and how its review stood,
+  what its checkpoint kept of the checks, and why. The list of closed
+  lanes says how each ended. With an older Kito a closed lane says only
+  that it is closed.
 - **Comments**: on a line of the diff, or on the lane as a whole;
   answers; resolving. The agent working in the lane is told before its
   next edit, as with `kito lane comment`.
@@ -44,16 +51,29 @@ the repository gives it. Nothing of Kito is linked into it.
 - **Conflicts**: what the lane and its target both did, side by side;
   keep one, or write the text. The next integration applies it.
 - **Opening and closing** a lane: for whom, why, and what it will change.
-- **The code, with its reasons**: the files on one side, a file in the
-  middle with a stripe beside each line for the reason it was last
-  written for, and beside it what that reason was: point at a line to
-  read why it is there, at a reason to see the lines it wrote. As the
-  main lane has it, or as a lane does.
+- **Code** (Kito 0.41): the repository a directory at a time, each file
+  and directory with its last change beside it (why, who, when; the why
+  leads to that checkpoint), and the directory's README under them. A
+  file is shown with a stripe beside each line for the reason it was
+  last written for, and beside it what that reason was: point at a line
+  to read why it is there, at a reason to see the lines it wrote; and it
+  has its own history. As the main lane has it, as a lane does, or as it
+  was at any checkpoint (a file is then its text, without the reasons,
+  which are known for the present). With an older Kito the directories
+  are made from the list of files, without last changes, for the
+  present only.
 - **Why**: for a function, a file or what a lane changed, the reasons it
   is the way it is, which of its lines each reason wrote, who uses it,
   which lanes are on it now, and the notes left on it. Earlier work is
   found by the words of its reason.
-- **The log** of the main lane: each checkpoint and the changes it holds.
+- **History** (Kito 0.41): the checkpoints of the main lane, the latest
+  first, each as a line: why it was made, who made it (the agent, its
+  assistant, for whom), the lane and the task it came from, when, how
+  many lines and files, its checks and approvals, its git commit. For
+  one file or directory, those that changed it. A checkpoint has a page:
+  what it is, the files it changed as diffs with each function's reason,
+  and the repository's files as they were then. With an older Kito this
+  is the log: each checkpoint and the single changes it holds.
 - **Notes**: every note on the repository's code; leaving one, removing
   one.
 - **Kitchens**, behind a server that runs the kitchen plugin

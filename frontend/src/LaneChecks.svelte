@@ -3,7 +3,8 @@
   // thing a line: how it stands, what it is, and a sentence on it.
   import { CHECK_WORDS } from './standing.js';
 
-  let { rows } = $props();
+  // `foot`: the line under them; none for what a closed lane kept.
+  let { rows, foot = 'Check commands run when the lane asks to be integrated.' } = $props();
 </script>
 
 <ul class="panel rows">
@@ -24,7 +25,7 @@
     </li>
   {/each}
 </ul>
-<p class="footnote">Check commands run when the lane asks to be integrated.</p>
+{#if foot}<p class="footnote">{foot}</p>{/if}
 
 <style>
   .items {

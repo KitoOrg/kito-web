@@ -2,7 +2,7 @@
   // What a lane did to one file: its functions, its lines, and what was
   // said on them.
   import { untrack } from 'svelte';
-  import { focus, whyLink } from './api.js';
+  import { codeLink, focus, whyLink } from './api.js';
   import { markViewed, viewedAs } from './review.js';
   import Confirm from './Confirm.svelte';
   import Icon from './Icon.svelte';
@@ -10,8 +10,14 @@
   import { toast } from './toast.svelte.js';
 
   // `drafts`: the comments of the review being written, on this file;
-  // `draft`, `undraft`: add one, remove one (Kito 0.38).
-  let { lane, file, threads, changed, drafts = [], draft = null, undraft = null, mayWrite = true } = $props();
+  // `draft`, `undraft`: add one, remove one (Kito 0.38). `at`: what a
+  // checkpoint changed (Kito 0.41), the file shown as it was then.
+  // `viewing`: it can be marked as viewed, where something is reviewed.
+  let { lane, file, threads, changed, drafts = [], draft = null, undraft = null, mayWrite = true, at = null, viewing = true } = $props();
+
+  // Where the file and its functions are read: at the checkpoint, or as the lane has them.
+  let fileHref = $derived(at ? codeLink(file.path, { at }) : whyLink(file.path, lane));
+  const symbolHref = (symbol) => whyLink(symbol, at ? null : lane);
 
   // The line a comment is being written on (its number in the lane's text).
   let writing = $state(null);
@@ -21,10 +27,10 @@
 
   // Viewed: folded, until the lane changes the file again. Asked once,
   // of the file as it is when it is first shown.
-  let viewed = $state(untrack(() => viewedAs(lane, file.path) === (file.after ?? file.before ?? '')));
+  let viewed = $state(untrack(() => viewing && viewedAs(at ?? lane, file.path) === (file.after ?? file.before ?? '')));
   function setViewed(on) {
     viewed = on;
-    markViewed(lane, file.path, on ? (file.after ?? file.before ?? '') : null);
+    markViewed(at ?? lane, file.path, on ? (file.after ?? file.before ?? '') : null);
   }
 
   // Every line of every hunk, with where it is on each side.
@@ -80,7 +86,7 @@
 <section class="panel file" id={`file-${file.path}`}>
   <div class="panel-head">
     <h3 class="mono">
-      {#if file.change === 'removed'}{file.path}{:else}<a href={whyLink(file.path, lane)}>{file.path}</a>{/if}
+      {#if file.change === 'removed'}{file.path}{:else}<a href={fileHref}>{file.path}</a>{/if}
     </h3>
     {#if file.change !== 'changed'}<span class="tag">{file.change}</span>{/if}
     {#if file.was}<span class="small soft">was <span class="mono">{file.was}</span></span>{/if}
@@ -91,9 +97,11 @@
       <span class="plus">+{file.added}</span>
       <span class="minus">−{file.removed}</span>
     {/if}
-    <label class="check">
-      <input type="checkbox" checked={viewed} onchange={(event) => setViewed(event.currentTarget.checked)} /> Viewed
-    </label>
+    {#if viewing}
+      <label class="check">
+        <input type="checkbox" checked={viewed} onchange={(event) => setViewed(event.currentTarget.checked)} /> Viewed
+      </label>
+    {/if}
   </div>
 
   {#if !viewed}
@@ -105,7 +113,7 @@
             {#if symbol.change === 'removed'}
               <span class="ref">{name(symbol)}</span>
             {:else}
-              <a class="ref" href={whyLink(symbol.symbol, lane)}>{name(symbol)}</a>
+              <a class="ref" href={symbolHref(symbol.symbol)}>{name(symbol)}</a>
             {/if}
             {#if symbol.lines}<span class="small faint">{where(symbol)}</span>{/if}
             {#if symbol.was}<span class="small soft">was <span class="mono">{symbol.was}</span></span>{/if}

@@ -1,7 +1,30 @@
 // What stands between a lane and the lane it is integrated into, as far
 // as can be said before it asks: each thing with a tone (`ok`, `warn`,
 // `bad`, or nothing when there is nothing to pass) and a sentence.
-import { count } from './format.js';
+import { count, span } from './format.js';
+
+/**
+ * What a checkpoint kept of how a lane was let through (Kito 0.41), in
+ * the rows `checksOf` gives: its check commands and how they ended (all
+ * of them, not each), who approved it, who reviewed it.
+ */
+export function keptOf(point) {
+  const checks = point.checks;
+  const took = checks?.duration_ms >= 60000 ? `, in ${span(checks.duration_ms)}` : '';
+  const rows = [
+    checks
+      ? { name: 'Check commands', tone: checks.passed ? 'ok' : 'bad', text: `${checks.passed ? 'All passed' : 'Not all passed'}${took}.`, items: checks.commands }
+      : { name: 'Check commands', tone: '', text: 'None ran.' },
+  ];
+  const reviewed = (point.reviewed_by ?? []).filter((name) => name !== point.approved_by);
+  const also = reviewed.length > 0 ? ` Reviewed by ${reviewed.join(', ')}.` : '';
+  rows.push(
+    point.approved_by
+      ? { name: 'Review', tone: 'ok', text: `Approved by ${point.approved_by}.${also}` }
+      : { name: 'Review', tone: '', text: `Nobody approved it.${also}` },
+  );
+  return rows;
+}
 
 /**
  * `info`: the lane; `diff`: what it changes; `review`: where its review

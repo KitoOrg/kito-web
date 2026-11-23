@@ -10,6 +10,8 @@ async function read(response) {
   if (!response.ok) {
     const error = new Error(body?.error ?? `the server answered ${response.status}`);
     error.status = response.status;
+    // The daemon's own code, when it said no itself (`-32601`: no such request).
+    if (typeof body?.code === 'number') error.code = body.code;
     throw error;
   }
   return body;
@@ -135,13 +137,22 @@ export function watch(told) {
   };
 }
 
-/** The text of a file as a lane has it (default: the main lane); null: no such file. */
-export async function fileText(path, lane = null) {
-  const params = { paths: [path] };
-  if (lane) params.lane = lane;
-  const listed = await ask('lane_files', params);
-  const blob = listed.files?.[0]?.blob;
-  if (!blob) return null;
+// The requests the server said it does not have: a Kito older than this
+// client. Found out from a request's own failure, and not asked again.
+const missing = new Set();
+
+/** Whether `error` says the server has no `method` (an older Kito, or a program that does not pass it on); remembered. */
+export function lacks(error, method) {
+  const unknown = error?.code === -32601 || (error?.status === 403 && error?.code === undefined);
+  if (unknown) missing.add(method);
+  return unknown;
+}
+
+/** Whether the server already said it has no `method`. */
+export const lacked = (method) => missing.has(method);
+
+/** The text of a content by its ID (`get_blobs`); null: none. */
+export async function blobText(blob) {
   const answer = await ask('get_blobs', { blobs: [blob] });
   const encoded = answer.blobs?.[blob];
   if (encoded === undefined) return null;
@@ -149,10 +160,49 @@ export async function fileText(path, lane = null) {
   return new TextDecoder().decode(bytes);
 }
 
-/** The address of the page that says why a function, a file or lines are the way they are. */
+/** The text of a file as a lane has it (default: the main lane); null: no such file. */
+export async function fileText(path, lane = null) {
+  const params = { paths: [path] };
+  if (lane) params.lane = lane;
+  const listed = await ask('lane_files', params);
+  const blob = listed.files?.[0]?.blob;
+  return blob ? blobText(blob) : null;
+}
+
+/**
+ * The address of a file or a directory (`dir`) in Code: as the main lane
+ * has it now, as a lane has it (`lane`), or as it was at a checkpoint
+ * (`at`). The root is `''`.
+ */
+export function codeLink(path, { at = null, lane = null, dir = false } = {}) {
+  const parts = String(path ?? '')
+    .split('/')
+    .filter(Boolean)
+    .map(encodeURIComponent)
+    .join('/');
+  const query = new URLSearchParams();
+  if (at) query.set('at', at);
+  if (lane) query.set('lane', lane);
+  const said = query.toString();
+  return `#/code${parts ? `/${parts}${dir ? '/' : ''}` : ''}${said ? `?${said}` : ''}`;
+}
+
+/** The address of the page that says why a function, a file or lines are the way they are: a file's is in Code. */
 export function whyLink(target, lane = null) {
+  const text = String(target);
+  if (!text.includes(':')) return codeLink(text, { lane, dir: text.endsWith('/') });
   const query = lane ? `?lane=${encodeURIComponent(lane)}` : '';
-  return `#/why/${encodeURIComponent(target)}${query}`;
+  return `#/why/${encodeURIComponent(text)}${query}`;
+}
+
+/** The address of a checkpoint's page (`ckpt#4`). */
+export function checkpointLink(id) {
+  return `#/history/${encodeURIComponent(id)}`;
+}
+
+/** The address of the checkpoints that changed a file or a directory; the whole history without one. */
+export function historyLink(path = null) {
+  return path ? `#/history?path=${encodeURIComponent(path)}` : '#/history';
 }
 
 /** The address of a lane's page: `lane/3` or the name of a permanent one. */

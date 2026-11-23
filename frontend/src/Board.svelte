@@ -6,6 +6,7 @@
   import { LANE_PLACES, placeWords, sameCode, standing } from './standing.js';
   import Assistant from './Assistant.svelte';
   import Empty from './Empty.svelte';
+  import Ended from './Ended.svelte';
   import Err from './Err.svelte';
   import Icon from './Icon.svelte';
   import Loading from './Loading.svelte';
@@ -198,6 +199,10 @@
               {who(lane.agent, lane.owner)}
               {#if lane.assistant?.model}· <span class="mono">{lane.assistant.model}</span>{/if}
               {#if lane.state !== 'closed'}· {count(lane.files.length, 'file')}{/if}
+              <!-- How a closed lane ended, and what it changed: said by a Kito from 0.41 on. -->
+              {#if lane.state === 'closed' && Array.isArray(lane.integrations)}
+                · <Ended {lane} links={false} /> · {count(lane.files.length, 'file')}
+              {/if}
               {#if lane.last > 0}· changed <Time ms={lane.last} />{/if}
               {#if lane.target && lane.target !== 'main'}· into <span class="ref">{lane.target}</span>{/if}
               {#if lane.scope?.length > 0}

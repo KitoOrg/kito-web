@@ -1,5 +1,5 @@
 <script>
-  import { behindServer, info, me, signOut } from './api.js';
+  import { behindServer, codeLink, historyLink, info, me, signOut } from './api.js';
   import { survey } from './needs.js';
   import { shell } from './shell.svelte.js';
   import Account from './Account.svelte';
@@ -7,9 +7,11 @@
   import Audit from './Audit.svelte';
   import Backups from './Backups.svelte';
   import Board from './Board.svelte';
+  import Checkpoint from './Checkpoint.svelte';
   import Code from './Code.svelte';
   import Empty from './Empty.svelte';
   import Err from './Err.svelte';
+  import History from './History.svelte';
   import Home from './Home.svelte';
   import Icon from './Icon.svelte';
   import Insights from './Insights.svelte';
@@ -17,7 +19,6 @@
   import Search from './Search.svelte';
   import Instructions from './Instructions.svelte';
   import Lane from './Lane.svelte';
-  import Log from './Log.svelte';
   import Logo from './Logo.svelte';
   import NoAccess from './NoAccess.svelte';
   import Notes from './Notes.svelte';
@@ -148,8 +149,12 @@
   let openLanes = $derived(seen?.repos.find((one) => one.name === (repo ?? about?.repository))?.lanes.length ?? null);
 
   // `#/lane/3` (and `?tab=changes&at=src/shop.ts` for a part of it),
-  // `#/why/src%2Fshop.ts%3Atotal?lane=3`, `#/log`, `#/notes`, `#/admin`;
-  // anything else is the lanes.
+  // `#/why/src%2Fshop.ts%3Atotal?lane=3` (a function, or lines),
+  // `#/code/src/shop.ts?at=ckpt%234` (a file or a directory, `/` at the end
+  // of one, now or at a checkpoint), `#/history?path=src`,
+  // `#/history/ckpt%234`, `#/notes`, `#/admin`; anything else is the lanes.
+  // What was written before is read too, and the address said anew
+  // (`address`): `#/log` is History, `#/why` and a file's `#/why/…` are Code.
   let page = $derived.by(() => {
     const [path, query = ''] = route.replace(/^#\/?/, '').split('?');
     const [name, ...rest] = path.split('/');
@@ -158,9 +163,22 @@
       return { name: 'lane', lane: decodeURIComponent(rest.join('/')), tab: asked.get('tab') ?? 'conversation', at: asked.get('at') };
     }
     if (name === 'why' && rest.length > 0) {
-      return { name: 'why', target: decodeURIComponent(rest.join('/')), lane: asked.get('lane') };
+      const target = decodeURIComponent(rest.join('/'));
+      if (target.includes(':')) return { name: 'why', target, lane: asked.get('lane') };
+      const lane = asked.get('lane');
+      const dir = target.endsWith('/');
+      const file = target.replace(/\/+$/, '');
+      return { name: 'code', path: file, dir, at: null, lane, address: codeLink(file, { lane, dir }) };
     }
-    if (['why', 'log', 'notes', 'admin', 'people', 'settings', 'instructions'].includes(name)) return { name };
+    if (name === 'why') return { name: 'code', path: '', dir: true, at: null, lane: null, address: codeLink('') };
+    if (name === 'code') {
+      const parts = rest.filter(Boolean).map(decodeURIComponent);
+      return { name: 'code', path: parts.join('/'), dir: path.endsWith('/'), at: asked.get('at'), lane: asked.get('lane') };
+    }
+    if (name === 'history' && rest.filter(Boolean).length > 0) return { name: 'checkpoint', id: decodeURIComponent(rest.join('/')) };
+    if (name === 'history') return { name, path: asked.get('path') };
+    if (name === 'log') return { name: 'history', path: null, address: historyLink() };
+    if (['notes', 'admin', 'people', 'settings', 'instructions'].includes(name)) return { name };
     if (name === 'tasks') return { name, task: asked.get('task') };
     if (name === 'search') return { name, q: asked.get('q') ?? '' };
     if (name === 'insights') return { name };
@@ -168,8 +186,15 @@
     if (name === 'kitchens') return { name, k: asked.get('k') };
     return { name: 'lanes' };
   });
+  // An address written before: said as it is written now, without a step of its own in the history.
+  $effect(() => {
+    if (!page.address || page.address === location.hash) return;
+    history.replaceState(history.state, '', page.address);
+    route = page.address;
+  });
   // The part of the client a page belongs to.
-  let part = $derived(page.name === 'lane' ? 'lanes' : page.name);
+  const PART_OF = { lane: 'lanes', why: 'code', checkpoint: 'history' };
+  let part = $derived(PART_OF[page.name] ?? page.name);
 
   // Who uses a repository: for its maintainers and the server's admins.
   let mayManage = $derived(role === 'maintain' || Boolean(who?.admin));
@@ -179,8 +204,8 @@
   let parts = $derived([
     ['lanes', '#/', 'Lanes'],
     ['tasks', '#/tasks', 'Tasks'],
-    ['why', '#/why', 'Code and why'],
-    ['log', '#/log', 'Log'],
+    ['code', '#/code', 'Code'],
+    ['history', '#/history', 'History'],
     ['notes', '#/notes', 'Notes'],
     ['insights', '#/insights', 'Insights'],
     ['instructions', '#/instructions', 'Instructions'],
@@ -348,15 +373,23 @@
     {#key page.lane}
       <Lane lane={page.lane} tab={page.tab} at={page.at} user={who?.user ?? null} {role} />
     {/key}
-  {:else if page.name === 'why' && page.target?.includes(':')}
+  {:else if page.name === 'why'}
     <!-- A function, or some lines: all that is known of it. -->
     {#key `${page.target} ${page.lane}`}
       <Why target={page.target} lane={page.lane} {role} />
     {/key}
-  {:else if page.name === 'why'}
-    <!-- The files, and one of them read with its reasons. -->
-    {#key `${page.target ?? ''} ${page.lane ?? ''}`}
-      <Code file={page.target ?? null} lane={page.lane ?? null} />
+  {:else if page.name === 'code'}
+    <!-- A directory, or a file read with its reasons: now, in a lane, or at a checkpoint. -->
+    {#key `${page.path} ${page.dir} ${page.at ?? ''} ${page.lane ?? ''}`}
+      <Code path={page.path} dir={page.dir} at={page.at} lane={page.lane} />
+    {/key}
+  {:else if page.name === 'history'}
+    {#key page.path}
+      <History path={page.path} />
+    {/key}
+  {:else if page.name === 'checkpoint'}
+    {#key page.id}
+      <Checkpoint id={page.id} />
     {/key}
   {:else if page.name === 'search'}
     {#key page.q}
@@ -387,8 +420,6 @@
         <People {repo} {who} />
       {/key}
     {/if}
-  {:else if page.name === 'log'}
-    <Log />
   {:else if page.name === 'notes'}
     <Notes {role} />
   {:else}

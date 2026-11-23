@@ -99,7 +99,7 @@
     <a class="ref" href={whyLink(graph.target.file, lane)}>{graph.target.file}</a>{/if}
 {/snippet}
 
-<PageHead title={name} mono name={short} back={{ href: '#/why', label: 'Code and why' }} docs="code-and-why" lead={graph ? facts : null} />
+<PageHead title={name} mono name={short} back={{ href: '#/code', label: 'Code' }} docs="code-and-why" lead={graph ? facts : null} />
 
 {#if graph === null}
   {#if failed}<Err message={failed} />{:else}<Loading lines={4} />{/if}

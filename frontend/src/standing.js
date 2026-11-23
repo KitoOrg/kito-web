@@ -125,5 +125,11 @@ export function verdictStanding(word) {
   return { text, tone };
 }
 
+/** `{ text, tone }` of the checks a checkpoint kept (Kito 0.41): whether they all passed; nothing when none ran. */
+export function checksStanding(checks) {
+  if (!checks) return { text: '', tone: '' };
+  return checks.passed ? { text: 'checks passed', tone: 'ok' } : { text: 'checks failed', tone: 'bad' };
+}
+
 /** What the ring before a check of a lane means, for whoever cannot see it. */
 export const CHECK_WORDS = { ok: 'passes', warn: 'needs a look', bad: 'stops it', '': 'nothing to pass' };

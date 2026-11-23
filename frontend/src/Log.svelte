@@ -1,6 +1,7 @@
 <script>
   // What was recorded on the main lane, newest first: checkpoints, and
-  // the changes each holds.
+  // the changes each holds. History, where the server lists no
+  // checkpoints of their own.
   import { ask, watch, whyLink } from './api.js';
   import { humanize, opName } from './format.js';
   import Empty from './Empty.svelte';
@@ -54,7 +55,8 @@
   const target = (op) => (op.symbol && op.path ? `${op.path}:${op.symbol}` : op.path);
 </script>
 
-<PageHead title="Log" docs="log" />
+<!-- What History is on a Kito that lists no checkpoints (before 0.41). -->
+<PageHead title="History" docs="history" />
 
 {#if failed}
   <Err message={failed} />

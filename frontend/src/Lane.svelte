@@ -3,10 +3,12 @@
   // changes, what stands in its way, and why the code it touches is the
   // way it is. Beside them: who reviewed it, its scope, who else is on
   // its code. Under them: the review being written, and integrating.
+  // A closed lane (Kito 0.41) is read the same way, and nothing in it
+  // changes: how it ended, what each integration made, what it left.
   import { untrack } from 'svelte';
-  import { ask, laneLink, watch } from './api.js';
+  import { ask, checkpointLink, laneLink, watch } from './api.js';
   import { assistantOf } from './assistants.js';
-  import { checksOf, stopping } from './checks.js';
+  import { checksOf, keptOf, stopping } from './checks.js';
   import { count, laneName, laneTitle, tasked, who } from './format.js';
   import { loadDrafts, saveDrafts } from './review.js';
   import { verdictStanding } from './standing.js';
@@ -14,6 +16,7 @@
   import Assistant from './Assistant.svelte';
   import Confirm from './Confirm.svelte';
   import Empty from './Empty.svelte';
+  import Ended from './Ended.svelte';
   import Err from './Err.svelte';
   import FileDiff from './FileDiff.svelte';
   import Integrate from './Integrate.svelte';
@@ -40,8 +43,30 @@
   let commands = $state([]);
   let resolved = $state(false);
   let failed = $state('');
-  // A lane that is closed: what is still known of it.
+  // A lane that is closed, where the server answers nothing else of it
+  // (before Kito 0.41): what is still known of it.
   let closed = $state(null);
+
+  // A closed lane the server still reads (Kito 0.41): what each of its
+  // integrations made, as its checkpoint and that checkpoint's diff.
+  let ended = $derived(info?.state === 'closed');
+  // Each with what could not be had of it: its checks (`pointFailed`), its diff (`filesFailed`).
+  let kept = $state(null);
+  let keeping = false;
+  async function loadKept(status) {
+    const made = (status.integrations ?? []).filter((one) => one.checkpoint);
+    kept = await Promise.all(
+      made.map(async (one) => {
+        const [[point, pointFailed], [changes, filesFailed]] = await Promise.all([
+          settle(ask('checkpoint_info', { checkpoint: one.checkpoint })),
+          settle(ask('diff', { to: one.checkpoint })),
+        ]);
+        return { id: one.checkpoint, into: one.into, point, pointFailed, files: changes?.files ?? [], filesFailed };
+      }),
+    );
+  }
+  // The parts of a closed lane the server did not give, and why.
+  let missing = $state({ diff: '', said: '', review: '' });
 
   // Behind a server, somebody who may only read changes nothing here.
   let mayWrite = $derived(role !== 'read');
@@ -100,23 +125,45 @@
     }
   }
 
+  // What a request answered, or why it did not: `[value, '']` or `[null, message]`.
+  const settle = (asked) => asked.then(
+    (value) => [value, ''],
+    (error) => [null, error.message],
+  );
+
   async function load() {
-    try {
-      // The diff first: it records what was saved in the lane a moment ago.
-      const changes = await ask('lane_diff', { lane });
-      const [status, said, stands, board, repository] = await Promise.all([
-        ask('lane_status', { lane }),
-        ask('comments', { lane, all: resolved }),
-        ask('review', { lane }),
-        ask('board').catch(() => []),
-        ask('status').catch(() => null),
-      ]);
-      [diff, info, comments, review, failed] = [changes, status, said, stands, ''];
-      seen = board.find((one) => one.id === status.id) ?? null;
-      commands = repository?.repo?.checks ?? [];
-    } catch (error) {
-      failed = error.message;
+    // The diff first: it records what was saved in the lane a moment ago.
+    const [changes, diffFailed] = await settle(ask('lane_diff', { lane }));
+    const [[status, statusFailed], [said, saidFailed], [stands, standsFailed], [board], [repository]] = await Promise.all([
+      settle(ask('lane_status', { lane })),
+      settle(ask('comments', { lane, all: resolved })),
+      settle(ask('review', { lane })),
+      settle(ask('board')),
+      settle(ask('status')),
+    ]);
+    // A lane the server does not read: none, or one closed before Kito
+    // 0.41, which refuses its status. Then what is still known of it.
+    if (status === null || (changes === null && status.state !== 'closed')) {
+      failed = statusFailed || diffFailed;
       if (info === null) await gone();
+      return;
+    }
+    const over = status.state === 'closed';
+    // An open lane is read whole; what stays on the page meanwhile is what it was.
+    if (!over && (said === null || stands === null)) {
+      failed = saidFailed || standsFailed;
+      return;
+    }
+    // Of a closed lane, what can be had: a part that cannot says so in its place.
+    diff = changes ?? { files: [], onto: status.target ?? 'main', base: '' };
+    [info, comments, review, failed] = [status, said ?? [], stands ?? { verdicts: [] }, ''];
+    missing = { diff: changes === null ? diffFailed : '', said: said === null ? saidFailed : '', review: stands === null ? standsFailed : '' };
+    seen = (board ?? []).find((one) => one.id === status.id) ?? null;
+    commands = repository?.repo?.checks ?? [];
+    // What a closed lane integrated does not change: asked once.
+    if (over && !keeping) {
+      keeping = true;
+      loadKept(status);
     }
   }
 
@@ -176,7 +223,20 @@
   const inFile = (path) => threads.filter((thread) => thread.file === path);
 
   // The conflicts no integration has applied a decision to yet.
-  let conflicts = $derived((info?.conflicts ?? []).filter((conflict) => typeof conflict === 'object' && !conflict.resolved));
+  let conflicts = $derived(ended ? [] : (info?.conflicts ?? []).filter((conflict) => typeof conflict === 'object' && !conflict.resolved));
+
+  // Every file a closed lane changed: what it integrated, then what it left.
+  let changedFiles = $derived(ended ? [...(kept ?? []).flatMap((group) => group.files), ...(diff?.files ?? [])] : (diff?.files ?? []));
+  // What a closed lane's checkpoints kept of its checks and its review, one list each.
+  let keptRows = $derived((kept ?? []).map((group) => ({ id: group.id, rows: group.point ? keptOf(group.point) : [], failed: group.pointFailed })));
+  // A file is shown with what was said on it once: where it first comes.
+  let firstOf = $derived.by(() => {
+    const first = new Map();
+    for (const group of kept ?? []) for (const file of group.files) if (!first.has(file.path)) first.set(file.path, group.id);
+    for (const file of diff?.files ?? []) if (!first.has(file.path)) first.set(file.path, '');
+    return first;
+  });
+  const threadsIn = (group, path) => (firstOf.get(path) === group ? inFile(path) : []);
 
   let totals = $derived(
     (diff?.files ?? []).reduce((sum, file) => ({ added: sum.added + file.added, removed: sum.removed + file.removed }), {
@@ -187,16 +247,18 @@
 
   // What the lane changed, for its reasons: functions where the file has
   // them, the file itself where it has none.
-  let targets = $derived(
-    (diff?.files ?? []).flatMap((file) => {
+  let targets = $derived.by(() => {
+    const found = new Map();
+    for (const file of changedFiles) {
       const symbols = (file.symbols ?? []).filter((symbol) => symbol.change !== 'removed');
-      if (symbols.length > 0) return symbols.map((symbol) => ({ target: symbol.symbol, kind: 'function', change: symbol.change }));
-      return file.change === 'removed' ? [] : [{ target: file.path, kind: 'file', change: file.change }];
-    }),
-  );
+      if (symbols.length > 0) for (const symbol of symbols) found.set(symbol.symbol, { target: symbol.symbol, kind: 'function', change: symbol.change });
+      else if (file.change !== 'removed') found.set(file.path, { target: file.path, kind: 'file', change: file.change });
+    }
+    return [...found.values()];
+  });
 
   let rows = $derived(info && diff && review ? checksOf({ info, diff, review, checks: commands, conflicts }) : []);
-  let stops = $derived(stopping(rows));
+  let stops = $derived(ended ? keptRows.reduce((sum, group) => sum + stopping(group.rows), 0) : stopping(rows));
   // The other lanes on the very same code, each said once: by the
   // function both are on rather than by one that calls it.
   let beside = $derived.by(() => {
@@ -211,7 +273,7 @@
   const here = (name) => `${laneLink(lane)}${name === 'conversation' ? '' : `?tab=${name}`}`;
   let parts = $derived([
     ['conversation', 'Conversation', threads.length],
-    ['changes', 'Changes', diff?.files.length ?? 0],
+    ['changes', 'Changes', ended ? new Set(changedFiles.map((file) => file.path)).size : (diff?.files.length ?? 0)],
     ['checks', 'Checks', stops],
     ['why', 'Why', targets.length],
   ]);
@@ -219,12 +281,14 @@
 
   $effect(() => {
     // From a comment to the file it is on.
-    if (part !== 'changes' || !at || !diff) return;
+    if (part !== 'changes' || !at || !diff || (ended && kept === null)) return;
     queueMicrotask(() => document.getElementById(`file-${at}`)?.scrollIntoView({ block: 'start' }));
   });
 
   // Whether who is signed in gave a verdict: then they may see what changed since.
-  let reviewed = $derived(Boolean(review?.verdicts.some((verdict) => user === null || verdict.by === user)));
+  let reviewed = $derived(!ended && Boolean(review?.verdicts.some((verdict) => user === null || verdict.by === user)));
+  // Nothing of a closed lane is changed from here.
+  let mayChange = $derived(mayWrite && !ended);
   let shownFiles = $derived(sinceMine && since ? since.files : (diff?.files ?? []));
 
   // A lane as it is written, and as its page is headed: by its task, or
@@ -252,6 +316,23 @@
   {#if it.assistant?.model}· <span class="mono">{it.assistant.model}</span>{/if}
 {/snippet}
 
+<!-- Over what a closed lane integrated as a checkpoint (`id`), or over what it left. -->
+{#snippet changeHead(files, id, into)}
+  <div class="section-head">
+    <h2 class="section-title">
+      {#if id}
+        Integrated as <a class="ref" href={checkpointLink(id)}>{id}</a>{#if into && into !== 'main'}{' '}into {@render named(into)}{/if}
+      {:else}
+        Not integrated
+      {/if}
+    </h2>
+    {#if files.length > 0}
+      <span class="plus">+{files.reduce((sum, file) => sum + file.added, 0)}</span>
+      <span class="minus">−{files.reduce((sum, file) => sum + file.removed, 0)}</span>
+    {/if}
+  </div>
+{/snippet}
+
 {#snippet task(it)}<a class="ref" href={`#/tasks?task=${encodeURIComponent(it.task)}`}>{it.task}</a>{/snippet}
 
 {#snippet closing()}
@@ -270,7 +351,7 @@
     {#snippet lead()}{@render whose(closed)}{/snippet}
   </PageHead>
   <Empty title="This lane is closed">
-    <p>What it integrated is in the <a href="#/log">Log</a>.</p>
+    <p>What it integrated is in the <a href="#/history">History</a>.</p>
     {#if closed.scope?.length > 0}
       <p>Its scope: <span class="mono">{closed.scope.join(', ')}</span></p>
     {/if}
@@ -283,16 +364,20 @@
     <Loading lines={4} />
   {/if}
 {:else}
-  <PageHead title={titleOf(info)} name={nameOf(info)} {back} docs="a-lane" actions={mayWrite && !info.name ? closing : null}>
+  <PageHead title={titleOf(info)} name={nameOf(info)} {back} docs="a-lane" actions={mayChange && !info.name ? closing : null}>
     {#snippet after()}<State lane={info} />{/snippet}
     {#snippet lead()}
       {@render whose(info)}
-      · {count(diff.files.length, 'file')} into {@render named(diff.onto)}
-      {#if seen?.last_change_ms}· changed <Time ms={seen.last_change_ms} />{/if}
+      {#if ended}
+        <span class="ended"><Ended lane={info} capital /></span>
+      {:else}
+        · {count(diff.files.length, 'file')} into {@render named(diff.onto)}
+        {#if seen?.last_change_ms}· changed <Time ms={seen.last_change_ms} />{/if}
+      {/if}
     {/snippet}
   </PageHead>
   <Err message={closeFailed} />
-  {#if mayWrite}
+  {#if mayChange}
     <Integrate bind:this={integrator} {lane} {info} changed={load} talk={here('conversation')} />
   {/if}
   <Err message={failed} />
@@ -308,6 +393,7 @@
   <div class="cols">
     <div class="stack">
       {#if part === 'conversation'}
+        <Err message={missing.said} />
         <LaneTalk
           {lane}
           {info}
@@ -319,8 +405,33 @@
           target={diff.onto}
           bind:resolved
           changed={load}
-          {mayWrite}
+          mayWrite={mayChange}
         />
+      {:else if part === 'changes' && ended}
+        <!-- What each integration made, under its checkpoint; then what it left. -->
+        {#if kept === null}
+          <Loading />
+        {:else}
+          {#each kept as group (group.id)}
+            {@render changeHead(group.files, group.id, group.into)}
+            <Err message={group.filesFailed} />
+            {#each group.files as file (file.path)}
+              <FileDiff {lane} at={group.id} {file} threads={threadsIn(group.id, file.path)} changed={load} mayWrite={false} viewing={false} />
+            {/each}
+          {/each}
+          {#if missing.diff}
+            {@render changeHead([], null, null)}
+            <Err message={missing.diff} />
+          {:else if diff.files.length > 0}
+            {@render changeHead(diff.files, null, null)}
+            {#each diff.files as file (file.path)}
+              <FileDiff {lane} {file} threads={threadsIn('', file.path)} changed={load} mayWrite={false} viewing={false} />
+            {/each}
+          {/if}
+          {#if changedFiles.length === 0 && !missing.diff && !kept.some((group) => group.filesFailed)}
+            <Empty title="No changes" />
+          {/if}
+        {/if}
       {:else if part === 'changes'}
         <div class="summary">
           <p class="soft">
@@ -364,6 +475,23 @@
             />
           {/each}
         {/if}
+      {:else if part === 'checks' && ended}
+        {#if kept === null}
+          <Loading />
+        {:else if keptRows.length === 0}
+          <Empty title={(info.integrations ?? []).length === 0 ? 'Never integrated' : 'No checkpoint was made'} />
+        {:else}
+          {#each keptRows as group (group.id)}
+            {#if keptRows.length > 1}
+              <h2 class="section-title">Integrated as <a class="ref" href={checkpointLink(group.id)}>{group.id}</a></h2>
+            {/if}
+            {#if group.failed}
+              <Err message={group.failed} />
+            {:else}
+              <LaneChecks rows={group.rows} foot={null} />
+            {/if}
+          {/each}
+        {/if}
       {:else if part === 'checks'}
         <LaneChecks {rows} />
       {:else}
@@ -374,6 +502,7 @@
     <aside class="stack side">
       <section class="panel pad box">
         <h3>Review</h3>
+        <Err message={missing.review} />
         {#each review.verdicts as verdict (`${verdict.by} ${verdict.at_ms}`)}
           <p>
             {who(verdict.by, verdict.for)}
@@ -381,7 +510,7 @@
             <span class="small faint">· <Time ms={verdict.at_ms} /></span>
           </p>
         {:else}
-          <p class="none">None yet</p>
+          {#if !missing.review}<p class="none">None yet</p>{/if}
         {/each}
       </section>
 
@@ -423,7 +552,7 @@
     </aside>
   </div>
 
-  {#if mayWrite}
+  {#if mayChange}
     <ReviewBar
       {lane}
       {info}
@@ -441,6 +570,10 @@
 {/if}
 
 <style>
+  /* How a closed lane ended: a line of its own under who worked in it. */
+  .ended {
+    display: block;
+  }
   .summary {
     display: flex;
     align-items: center;
