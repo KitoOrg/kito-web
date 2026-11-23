@@ -58,18 +58,50 @@ const READS: &[&str] = &[
     "get_blobs",
     // How an integration that was asked for ended.
     "integration_result",
+    // What changed in a lane since the reader's own review.
+    "changes_since_review",
+    // The tasks, the search, the numbers, what agents are told.
+    "tasks",
+    "task",
+    "search",
+    "stats",
+    "instructions",
+    "instructions_text",
+    "instructions_history",
+    // What was: the checkpoints, what one changed, the files as they were.
+    "checkpoints",
+    "checkpoint_info",
+    "diff",
+    "tree",
 ];
 const WRITES: &[&str] = &[
     "comment",
     "resolve_comment",
     "verdict",
+    "submit_review",
+    "apply_suggestion",
     "add_note",
     "remove_note",
     "open_lane",
     "close_lane",
     "request_integration",
     "resolve_conflict",
+    "task_add",
+    "task_update",
+    "task_comment",
+    "task_done",
+    "task_reopen",
+    "task_drop",
+    "instructions_set",
+    "instructions_remove",
 ];
+
+/// What the client's pages ask only behind a server, where this program
+/// passes nothing on: the server's own pages (its people, a repository's
+/// rules, the kitchens' files), and the events, which have an address of
+/// their own here.
+#[cfg(test)]
+const ONLY_BEHIND_A_SERVER: &[&str] = &["configure", "protect", "put_file", "events"];
 
 #[derive(Clone)]
 struct App {
@@ -399,6 +431,96 @@ async fn main() -> ExitCode {
         Err(e) => {
             eprintln!("kito-web: {e}");
             ExitCode::FAILURE
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The requests the client's own files make: the name that `ask(` or
+    /// `askIn(` is given, first or after the repository.
+    fn asked_by_the_pages() -> Vec<(String, String)> {
+        let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("frontend/src");
+        let mut asked = Vec::new();
+        for entry in std::fs::read_dir(&source).unwrap() {
+            let path = entry.unwrap().path();
+            let name = path.file_name().unwrap().to_string_lossy().into_owned();
+            if !name.ends_with(".svelte") && !name.ends_with(".js") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap();
+            for call in ["ask(", "askIn("] {
+                for (at, _) in text.match_indices(call) {
+                    // Not the end of another name (`task(`), and not where `ask` is defined.
+                    let before = text[..at].chars().next_back();
+                    if before.is_some_and(|c| c.is_alphanumeric() || c == '_') {
+                        continue;
+                    }
+                    // What is asked is a name in quotes, given first, or
+                    // second after the repository: a name worked out
+                    // elsewhere is not one this can read.
+                    let rest: String = text[at + call.len()..]
+                        .trim_start()
+                        .chars()
+                        .take(200)
+                        .collect();
+                    let Some(open) = rest.find('\'') else {
+                        continue;
+                    };
+                    let Some(len) = rest[open + 1..].find('\'') else {
+                        continue;
+                    };
+                    let lead = rest[..open].trim();
+                    let first_or_after_the_repository = lead.is_empty()
+                        || lead.strip_suffix(',').is_some_and(|repository| {
+                            !repository.is_empty()
+                                && repository
+                                    .chars()
+                                    .all(|c| c.is_alphanumeric() || "_.$".contains(c))
+                        });
+                    let method = &rest[open + 1..open + 1 + len];
+                    let is_a_name = !method.is_empty()
+                        && method
+                            .chars()
+                            .all(|c| c.is_ascii_lowercase() || c == '_' || c == '.');
+                    if is_a_name && first_or_after_the_repository {
+                        asked.push((method.to_owned(), name.clone()));
+                    }
+                }
+            }
+        }
+        asked
+    }
+
+    #[test]
+    fn what_the_pages_ask_is_passed_on_here_or_asked_only_behind_a_server() {
+        let asked = asked_by_the_pages();
+        // The search found the pages' requests at all.
+        for known in ["lanes", "lane_diff", "tasks", "comment"] {
+            assert!(
+                asked.iter().any(|(method, _)| method == known),
+                "`{known}` was not found in the pages"
+            );
+        }
+        for (method, file) in &asked {
+            let here = READS.contains(&method.as_str()) || WRITES.contains(&method.as_str());
+            let elsewhere =
+                method.starts_with("server.") || ONLY_BEHIND_A_SERVER.contains(&method.as_str());
+            assert!(
+                here || elsewhere,
+                "{file} asks `{method}`, which `kito web` passes on to nobody: on one's own machine \
+                 that page fails. Add it to READS or WRITES, or to ONLY_BEHIND_A_SERVER"
+            );
+            assert!(
+                !(here && elsewhere),
+                "`{method}` is passed on and said to be asked only behind a server"
+            );
+        }
+        // And nothing is passed on twice.
+        for method in READS {
+            assert!(!WRITES.contains(method), "`{method}` is in both lists");
         }
     }
 }

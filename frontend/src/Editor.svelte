@@ -21,10 +21,16 @@
   // `removeLabel`, in the words of `removeAsk`. `hint`: what saving
   // means, a string or a snippet. `head`: more for the head, after its
   // own buttons. `fields`: the page's own fields, between the text and
-  // "Save".
+  // "Save". `md`: whether it is Markdown, when its name does not say it.
+  // `plain`: read as part of the page, with no card and no head: the
+  // text, and a quiet "Edit" after it, or `blank` ("Add a description")
+  // alone when it is empty; it is written in its card, as anywhere.
   let {
     name,
     mono = false,
+    md = null,
+    plain = false,
+    blank = '',
     text = '',
     editable = false,
     fresh = false,
@@ -48,7 +54,7 @@
   let busy = $state(false);
   let failed = $state('');
 
-  let isMarkdown = $derived(name.endsWith('.md'));
+  let isMarkdown = $derived(md ?? name.endsWith('.md'));
   // Nothing to save until something changed; a new text is a change already.
   let changed = $derived(draft.trim() !== '' && (fresh || draft !== text));
 
@@ -104,6 +110,17 @@
   }
 </script>
 
+{#if plain && !writing}
+  <!-- Read as part of the page: the text alone, and a quiet word to write it. -->
+  {#if text.trim() !== ''}
+    {#if isMarkdown}<div class="rendered">{@html markdown(text)}</div>{:else}<pre>{text}</pre>{/if}
+  {/if}
+  {#if editable}
+    <div class="controls flush">
+      <button bind:this={opener} class="quiet sm" onclick={edit}>{text.trim() === '' && blank ? blank : 'Edit'}</button>
+    </div>
+  {/if}
+{:else}
 <section class="panel editor">
   <div class="panel-head">
     <h3 class={[mono && 'mono']}>{name}</h3>
@@ -156,6 +173,7 @@
     <div class="pad"><pre>{text}</pre></div>
   {/if}
 </section>
+{/if}
 
 <style>
   /* Wherever it stands, a long line of code scrolls inside it and never makes it wider. */

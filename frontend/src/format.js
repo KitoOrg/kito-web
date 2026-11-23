@@ -98,6 +98,9 @@ export const tasked = (lane) => Boolean(lane.task?.startsWith('task#'));
  */
 export const laneTitle = (lane) => (tasked(lane) ? lane.intent : (lane.task ?? lane.intent)) ?? null;
 
+/** A lane's scope as it is typed (`src/a.ts:total src/b/`): its items, split at spaces and commas. */
+export const scopeItems = (text) => String(text ?? '').split(/[\s,]+/).filter((item) => item.length > 0);
+
 /**
  * The line that connects a directory to a repository of the server this
  * page is of. `clients`: how a client reaches it, as the server says it

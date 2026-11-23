@@ -1,41 +1,92 @@
 <script>
   // Tasks (Kito 0.33): what needs doing in a repository, as a board by
-  // where each stands, and one task with its lanes and what was said on
-  // it. Anyone who may write adds tasks, says whom they are for,
-  // comments, and closes them; a task is never closed by Kito itself.
-  import { ask, focus, laneLink, taskLink } from './api.js';
-  import { count, sentence, who } from './format.js';
-  import { markdown } from './md.js';
-  import { standing, taskStanding, taskWords, TASK_PLACES } from './standing.js';
+  // where each stands or as a list, narrowed by words and by whom each is
+  // for; one task opens beside them. Anyone who may write adds tasks,
+  // says whom they are for, starts lanes for them, comments, and closes
+  // them; a task is never closed by Kito itself.
+  import { tick } from 'svelte';
+  import { ask, focus } from './api.js';
   import { toast } from './toast.svelte.js';
-  import Confirm from './Confirm.svelte';
+  import { filterTasks, namesOf, TASK_ORDERS } from './tasks.js';
   import Empty from './Empty.svelte';
   import Err from './Err.svelte';
-  import Icon from './Icon.svelte';
   import Loading from './Loading.svelte';
+  import NamePicker from './NamePicker.svelte';
   import PageHead from './PageHead.svelte';
-  import State from './State.svelte';
-  import Time from './Time.svelte';
+  import TaskBoard from './TaskBoard.svelte';
+  import TaskList from './TaskList.svelte';
+  import TaskPanel from './TaskPanel.svelte';
 
   // `open`: the task the address names (`#/tasks?task=task%231`), if any.
   let { role = null, user = null, open: opened = null } = $props();
 
-  let tasks = $state(null);
-  let loadFailed = $state('');
-  // The task looked at, whole.
-  let shown = $state(null);
-  // What is being done now (`add`, `close`…): its button says so, the others wait.
-  let busy = $state('');
-  // What did not work, and where it was asked (`shown`: the task to look
-  // at, `board`: a card moved): it is said under those controls.
-  let failed = $state({ at: '', message: '' });
-  let comment = $state('');
-  let assignee = $state('');
-  let adding = $state(null);
-  let dragged = $state(null);
-
   const mayWrite = $derived(role !== 'read');
-  const failedAt = (at) => (failed.at === at ? failed.message : '');
+
+  // How the tasks are shown, kept in the address (`view`, `q`, `for`,
+  // `sort`, `dropped`) so that a link and Back show them the same. The
+  // view the address says is the view; the one chosen last is kept for an
+  // address that says none.
+  const VIEW_KEY = 'kito-tasks-view';
+  function lastView() {
+    try {
+      return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'board';
+    } catch {
+      return 'board';
+    }
+  }
+  function fromAddress() {
+    const query = new URLSearchParams(location.hash.split('?')[1] ?? '');
+    const view = query.get('view');
+    const sort = query.get('sort');
+    return {
+      view: view === 'list' || view === 'board' ? view : lastView(),
+      q: query.get('q') ?? '',
+      whom: query.get('for') ?? '',
+      sort: TASK_ORDERS.some(([key]) => key === sort) ? sort : 'updated',
+      dropped: query.get('dropped') === '1',
+    };
+  }
+  let chosen = $state(fromAddress());
+  $effect(() => {
+    const moved = () => (chosen = fromAddress());
+    addEventListener('hashchange', moved);
+    return () => removeEventListener('hashchange', moved);
+  });
+
+  /** The address of the page as it is shown, with `task` open beside it (null: none). */
+  function addressFor(task) {
+    const query = new URLSearchParams();
+    if (task) query.set('task', task);
+    // Always said, so that a link shows the same view whatever its reader chose last.
+    query.set('view', chosen.view);
+    if (chosen.q) query.set('q', chosen.q);
+    if (chosen.whom) query.set('for', chosen.whom);
+    if (chosen.sort !== 'updated') query.set('sort', chosen.sort);
+    if (chosen.dropped) query.set('dropped', '1');
+    const said = query.toString();
+    return `#/tasks${said ? `?${said}` : ''}`;
+  }
+  // What is chosen is written into the address as it is chosen, without
+  // a step of its own in the history.
+  $effect(() => {
+    const wanted = addressFor(opened);
+    if (location.hash.startsWith('#/tasks') && location.hash !== wanted) history.replaceState(history.state, '', wanted);
+  });
+  function setView(view) {
+    chosen.view = view;
+    try {
+      localStorage.setItem(VIEW_KEY, view);
+    } catch {
+      // A browser that keeps nothing: the address keeps it.
+    }
+  }
+
+  let tasks = $state(null);
+  // Every lane of the repository: where each lane of a task stands, and the agents a task can be for.
+  let lanes = $state([]);
+  // The repository's people, when the server says them to the reader.
+  let members = $state(null);
+  let loadFailed = $state('');
 
   async function load() {
     try {
@@ -45,100 +96,117 @@
       loadFailed = error.message;
     }
   }
-  async function show(id) {
-    const asked = opened;
+  async function loadLanes() {
     try {
-      const task = await ask('task', { task: id });
-      // A task says only the state of each of its lanes. Where an open one
-      // stands, with its review and its conflicts, is the repository's to say.
-      const open = task.lanes.some((lane) => lane.state !== 'closed') ? await ask('lanes').catch(() => []) : [];
-      // The address may have moved on while it was asked for.
-      if (opened !== asked) return;
-      task.lanes = task.lanes.map((lane) => open.find((one) => one.id === lane.id) ?? lane);
-      shown = task;
-      assignee = task.for ?? '';
-      if (failed.at === 'shown') failed = { at: '', message: '' };
-    } catch (error) {
-      if (opened === asked) failed = { at: 'shown', message: error.message };
+      lanes = await ask('lanes', { all: true });
+    } catch {
+      // A task still says the state of each of its lanes.
+    }
+  }
+  // Behind a server only, where somebody is signed in.
+  async function loadMembers() {
+    if (!user) return;
+    try {
+      const said = await ask('server.members');
+      members = (said.members ?? []).map((one) => one.user);
+    } catch {
+      // Only a maintainer is told who uses the repository: the names seen stand for them.
     }
   }
   load();
-  // The task shown is the one the address names: a card is a link to it,
-  // and going back leaves it.
-  $effect(() => {
-    shown = null;
-    if (opened) show(opened);
+  loadLanes();
+  loadMembers();
+  const changed = () => Promise.all([load(), loadLanes()]);
+
+  const names = $derived(namesOf({ tasks, lanes, members, user }));
+  const lanesById = $derived(new Map(lanes.map((lane) => [lane.id, lane])));
+  const shown = $derived(filterTasks(tasks, chosen));
+  const listed = $derived(chosen.dropped ? shown : shown.filter((task) => task.state !== 'dropped'));
+  // Whom the tasks are for, the reader first: the choices of the filter.
+  const whoms = $derived.by(() => {
+    const found = new Set((tasks ?? []).map((task) => task.for).filter(Boolean));
+    if (chosen.whom && chosen.whom !== 'nobody') found.add(chosen.whom);
+    const others = [...found].filter((name) => name !== user).sort((a, b) => a.localeCompare(b));
+    return user ? [user, ...others] : others;
   });
 
-  // One thing done to a task: its button waits, it is said, and what it
-  // changed is read again. `work` may answer what to say.
-  async function act(what, at, work, said = null) {
-    busy = what;
-    failed = { at: '', message: '' };
+  // The page changed a task the panel shows: the panel reads it again.
+  let stamp = $state(0);
+  let moveFailed = $state('');
+  // A card dropped on a column: done, or open again.
+  async function move(task, place) {
+    if (!mayWrite) return;
+    let work = null;
+    if (place === 'done' && task.state !== 'done') work = ['task_done', `${task.id} closed as done`];
+    else if (place !== 'done' && ['done', 'dropped'].includes(task.state)) work = ['task_reopen', `${task.id} reopened`];
+    if (!work) return;
+    moveFailed = '';
     try {
-      const told = await work();
-      toast(said ?? told);
+      await ask(work[0], { task: task.id });
+      toast(work[1]);
     } catch (error) {
-      failed = { at, message: error.message };
+      moveFailed = error.message;
     }
-    busy = '';
-    await Promise.all([load(), shown ? show(shown.id) : null]);
+    await changed();
+    stamp += 1;
   }
 
-  const close = (id, at = 'task') => act('close', at, () => ask('task_done', { task: id }), `${id} closed as done`);
-  const reopen = (id, at = 'task') => act('reopen', at, () => ask('task_reopen', { task: id }), `${id} reopened`);
-  const drop = (id) => act('drop', 'task', () => ask('task_drop', { task: id }), `${id} dropped`);
-  function assign(event) {
-    event.preventDefault();
-    const whom = assignee.trim();
-    act('for', 'for', () => ask('task_update', { task: shown.id, for: whom }), `${shown.id} is for ${whom || 'nobody'}`);
-  }
-  function say(event) {
-    event.preventDefault();
-    if (!comment.trim()) return;
-    act(
-      'comment',
-      'comment',
-      async () => {
-        await ask('task_comment', { task: shown.id, text: comment });
-        comment = '';
-      },
-      'Comment added',
-    );
-  }
-  function add(event) {
+  let adding = $state(null);
+  let addBusy = $state(false);
+  let addFailed = $state('');
+  async function add(event) {
     event.preventDefault();
     const it = adding;
     if (!it.title.trim()) return;
-    act('add', 'add', async () => {
+    addBusy = true;
+    addFailed = '';
+    try {
       const made = await ask('task_add', { title: it.title, text: it.text, for: it.for.trim() || null });
       adding = null;
+      toast(`${made.id} added`);
+      await load();
       // The new task is the one to look at.
-      location.hash = taskLink(made.id);
-      return `${made.id} added`;
-    });
+      location.hash = addressFor(made.id);
+    } catch (error) {
+      addFailed = error.message;
+    }
+    addBusy = false;
   }
 
-  // A card dropped on a column: done, or open again.
-  function droppedOn(place) {
-    const task = tasks?.find((one) => one.id === dragged);
-    dragged = null;
-    if (!task || !mayWrite) return;
-    if (place === 'done' && task.state !== 'done') close(task.id, 'board');
-    else if (place !== 'done' && ['done', 'dropped'].includes(task.state)) reopen(task.id, 'board');
-  }
-
-  // A column holds the tasks that stand there: one an agent thinks done is ready to close.
-  const inColumn = (place) => (tasks ?? []).filter((task) => taskStanding(task).place === place);
-  const dropped = $derived((tasks ?? []).filter((task) => task.state === 'dropped'));
+  // Escape puts the task away, unless it is said to what is being written or asked.
+  $effect(() => {
+    if (!opened) return;
+    const key = (event) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (event.target.closest?.('input, textarea, select, [role="dialog"]')) return;
+      location.hash = addressFor(null);
+    };
+    addEventListener('keydown', key);
+    return () => removeEventListener('keydown', key);
+  });
+  // Put away, the reader is back at its card or its row.
+  let was = null;
+  $effect(() => {
+    const left = was;
+    was = opened;
+    if (!left || opened) return;
+    tick().then(() => document.querySelector(`[data-task="${CSS.escape(left)}"]`)?.focus());
+  });
 </script>
+
+{#snippet views()}
+  <div class="seg" role="group" aria-label="View">
+    <button aria-pressed={chosen.view === 'board'} onclick={() => setView('board')}>Board</button>
+    <button aria-pressed={chosen.view === 'list'} onclick={() => setView('list')}>List</button>
+  </div>
+{/snippet}
 
 {#snippet adder()}
   <button class="primary" disabled={adding !== null} onclick={() => (adding = { title: '', text: '', for: '' })}>Add a task</button>
 {/snippet}
 
-<PageHead title="Tasks" docs="tasks" actions={mayWrite ? adder : null} />
-<Err message={loadFailed || failedAt('shown') || failedAt('board')} />
+<PageHead title="Tasks" docs="tasks" {views} actions={mayWrite ? adder : null} />
+<Err message={loadFailed} />
 
 {#if adding}
   <form class="panel pad narrow form" onsubmit={add}>
@@ -152,246 +220,85 @@
       <textarea rows="4" bind:value={adding.text}></textarea>
       <span class="hint">Markdown.</span>
     </label>
-    <label class="field">
+    <div class="field">
       <span>For</span>
-      <input bind:value={adding.for} placeholder="bob" />
-      <span class="hint">A person or an agent.</span>
-    </label>
+      <NamePicker value={adding.for} {names} {user} label="For" wide onpick={(name) => (adding.for = name)} />
+    </div>
     <div class="controls">
-      <button class="primary" disabled={busy !== '' || !adding.title.trim()}>{busy === 'add' ? 'Adding…' : 'Add'}</button>
+      <button class="primary" disabled={addBusy || !adding.title.trim()}>{addBusy ? 'Adding…' : 'Add'}</button>
       <button type="button" class="quiet" onclick={() => (adding = null)}>Cancel</button>
     </div>
-    <Err message={failedAt('add')} />
+    <Err message={addFailed} />
   </form>
-{/if}
-
-{#if opened}
-  {#if shown}
-    {@const stands = taskStanding(shown)}
-    <section class="panel narrow detail">
-      <div class="panel-head">
-        <h3>{shown.title}</h3>
-        <State task={shown} />
-        <span class="grow"></span>
-        <a class="button quiet sm" href="#/tasks" aria-label="Close"><Icon name="close" /></a>
-      </div>
-      <div class="pad stack">
-        <p class="soft small">
-          <span class="ref">{shown.id}</span> · asked for by {shown.by}
-          <Time ms={shown.at_ms} />
-          {#if !mayWrite && shown.for}· for {shown.for}{/if}
-          {#if shown.claimed_by}· taken up by {shown.claimed_by}{/if}
-          {#if shown.source?.url}
-            · from
-            <a href={shown.source.url} target="_blank" rel="noreferrer">{shown.source.kind ?? 'elsewhere'} <Icon name="external" size={12} /></a>
-          {/if}
-        </p>
-        {#if shown.text}<div class="rendered">{@html markdown(shown.text)}</div>{/if}
-
-        <div class="box">
-          <h4>Lanes</h4>
-          {#if shown.lanes.length > 0}
-            <ul class="panel rows tight">
-              {#each shown.lanes as lane (lane.id)}
-                <li>
-                  <a class="row" href={laneLink(lane.id)}>
-                    <span class={['ring', standing(lane).tone]} aria-hidden="true"></span>
-                    <span class="row-body"><span><span class="ref">{lane.id}</span> · {who(lane.agent, lane.owner)}</span></span>
-                    <span class="row-side"><State {lane} plain /></span>
-                  </a>
-                </li>
-              {/each}
-            </ul>
-          {:else}
-            <span class="none">None yet</span>
-          {/if}
-        </div>
-
-        {#if mayWrite}
-          <form class="field" onsubmit={assign}>
-            <label for="task-for">For</label>
-            <div class="controls">
-              <input id="task-for" bind:value={assignee} placeholder="bob" />
-              <button class="primary" disabled={busy !== '' || assignee.trim() === (shown.for ?? '')}>{busy === 'for' ? 'Saving…' : 'Save'}</button>
-            </div>
-            <span class="hint">A person or an agent.</span>
-          </form>
-          <Err message={failedAt('for')} />
-          <div class="controls">
-            {#if ['done', 'dropped'].includes(shown.state)}
-              <button disabled={busy !== ''} onclick={() => reopen(shown.id)}>{busy === 'reopen' ? 'Reopening…' : 'Reopen'}</button>
-            {:else}
-              <button class={[stands.place === 'ready' && 'primary']} disabled={busy !== ''} onclick={() => close(shown.id)}>
-                {busy === 'close' ? 'Closing…' : 'Close as done'}
-              </button>
-              <span class="grow"></span>
-              <Confirm
-                label="Drop"
-                ask={`Drop ${shown.id}? Nobody will do it; it can be reopened later.`}
-                working="Dropping…"
-                disabled={busy !== ''}
-                onyes={() => drop(shown.id)}
-              />
-            {/if}
-          </div>
-          <Err message={failedAt('task')} />
-        {/if}
-
-        <div class="box">
-          <h4>Comments</h4>
-          {#each shown.comments ?? [] as said (said.n)}
-            <div>
-              <p><b>{said.by}</b> <span class="small faint"><Time ms={said.at_ms} /></span></p>
-              <div class="rendered">{@html markdown(said.text)}</div>
-            </div>
-          {:else}
-            <span class="none">None yet</span>
-          {/each}
-          {#if mayWrite}
-            <form class="box" onsubmit={say}>
-              <textarea rows="3" bind:value={comment} aria-label="Comment"></textarea>
-              <div class="controls">
-                <button disabled={busy !== '' || !comment.trim()}>{busy === 'comment' ? 'Commenting…' : 'Comment'}</button>
-              </div>
-              <Err message={failedAt('comment')} />
-            </form>
-          {/if}
-        </div>
-      </div>
-    </section>
-  {:else if !failedAt('shown')}
-    <Loading />
-  {/if}
 {/if}
 
 {#if tasks === null}
   {#if !loadFailed}<Loading />{/if}
-{:else if tasks.length === 0}
-  <Empty title="No tasks yet" />
 {:else}
-  <div class="board">
-    {#each TASK_PLACES as place (place)}
-      {@const there = inColumn(place)}
-      {@const title = sentence(taskWords(place))}
-      <div
-        class="column"
-        role="group"
-        aria-label={title}
-        ondragover={(event) => event.preventDefault()}
-        ondrop={(event) => {
-          // A card is a link: dropped, it is not to be opened.
-          event.preventDefault();
-          droppedOn(place);
-        }}
-      >
-        <div class="column-head"><h3>{title}</h3><span class="count">{there.length}</span></div>
-        {#each there as task (task.id)}
-          <a
-            class="panel pad card"
-            href={taskLink(task.id)}
-            aria-current={task.id === shown?.id ? 'true' : undefined}
-            draggable={mayWrite}
-            ondragstart={() => (dragged = task.id)}
-          >
-            <span class="row-title">{task.title}</span>
-            <span class="row-meta facts">
-              <span class="ref">{task.id}</span>
-              {#if task.for}<span>for {task.for === user ? 'you' : task.for}</span>{/if}
-              {#if task.claimed_by}<span>taken up by {task.claimed_by}</span>{/if}
-              {#each task.lanes as lane (lane.id)}<span class="ref">{lane.id}</span>{/each}
-              {#if task.comment_count > 0}
-                <span>
-                  <span aria-hidden="true"><Icon name="comment" size={14} /> {task.comment_count}</span>
-                  <span class="sr">{count(task.comment_count, 'comment')}</span>
-                </span>
-              {/if}
-            </span>
-            {#if task.thinks_done}<span class="row-meta">{task.thinks_done} thinks it is done</span>{/if}
-          </a>
-        {:else}
-          <p class="none inset">None</p>
-        {/each}
-      </div>
-    {/each}
-  </div>
-  {#if dropped.length > 0}
-    <details>
-      <summary>{count(dropped.length, 'dropped task')}</summary>
-      <ul class="panel rows tight">
-        {#each dropped as task (task.id)}
-          <li>
-            <a class="row" href={taskLink(task.id)} aria-current={task.id === shown?.id ? 'true' : undefined}>
-              <span class="ref">{task.id}</span>
-              <span class="row-title">{task.title}</span>
-            </a>
-          </li>
-        {/each}
-      </ul>
-    </details>
+  {#if tasks.length > 0}
+    <form class="panel filters" role="search" onsubmit={(event) => event.preventDefault()}>
+      <input type="search" aria-label="Search the tasks" placeholder="Search" bind:value={chosen.q} />
+      <select aria-label="For" bind:value={chosen.whom}>
+        <option value="">For everybody</option>
+        {#each whoms as name (name)}<option value={name}>For {name === user ? 'you' : name}</option>{/each}
+        <option value="nobody">For nobody</option>
+      </select>
+      <select aria-label="Order" bind:value={chosen.sort}>
+        {#each TASK_ORDERS as [key, words] (key)}<option value={key}>{words}</option>{/each}
+      </select>
+      {#if chosen.view === 'list'}
+        <label class="check"><input type="checkbox" bind:checked={chosen.dropped} /> Show dropped</label>
+      {/if}
+    </form>
   {/if}
+  <Err message={moveFailed} />
+
+  <div class={['split', opened && 'beside']}>
+    <div class="shown">
+      {#if tasks.length === 0}
+        <Empty title="No tasks yet" />
+      {:else if chosen.view === 'list'}
+        <TaskList
+          tasks={listed}
+          lanes={lanesById}
+          {names}
+          {user}
+          current={opened}
+          hrefOf={addressFor}
+          beside={Boolean(opened)}
+          sort={chosen.sort}
+          onsort={(key) => (chosen.sort = key)}
+        />
+      {:else}
+        <TaskBoard tasks={shown} lanes={lanesById} {names} {user} current={opened} hrefOf={addressFor} {mayWrite} beside={Boolean(opened)} onmove={move} />
+      {/if}
+    </div>
+    {#if opened}
+      {#key opened}
+        <TaskPanel id={opened} {role} {user} {lanes} {names} {stamp} closeHref={addressFor(null)} onchanged={changed} />
+      {/key}
+    {/if}
+  </div>
 {/if}
 
 <style>
-  .detail {
-    margin-bottom: 20px;
-  }
-  /* Where the tasks stand, a column each: four side by side, then two, then one. */
-  .board {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: var(--gap);
-    margin-bottom: var(--gap);
-  }
-  /* A well the cards lie in: a card dropped anywhere on it is in that column. */
-  .column {
+  /* The tasks, and the one open beside them: about 520 wide on a wide screen. */
+  .split {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
-    align-content: start;
-    min-height: 120px;
-    padding: 8px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-panel);
-    background: color-mix(in srgb, var(--hover) 60%, transparent);
+    gap: 20px;
+    align-items: start;
   }
-  /* Its title, and its "None", start a little inside the edge of its cards. */
-  .column-head,
-  .inset {
-    padding-inline: 4px;
+  .split.beside {
+    grid-template-columns: minmax(0, 1fr) clamp(380px, 45%, 520px);
   }
-  .column-head {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding-top: 4px;
+  .shown {
+    min-width: 0;
   }
-  .card {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 4px;
-  }
-  /* The one shown above the board. */
-  .card[aria-current='true'] {
-    border-color: var(--accent);
-    box-shadow: var(--ring);
-  }
-  .facts {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 2px 8px;
-  }
+  /* Under 900 the task is the whole window, over the tasks. */
   @media (max-width: 900px) {
-    .board {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-  }
-  @media (max-width: 640px) {
-    .board {
+    .split.beside {
       grid-template-columns: minmax(0, 1fr);
-    }
-    .column {
-      min-height: 64px;
     }
   }
 </style>

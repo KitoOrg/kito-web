@@ -48,10 +48,12 @@
 
   $effect(() => {
     const moved = () => {
+      // A task opens beside the tasks: the page stays where it was.
+      const stays = route.startsWith('#/tasks') && location.hash.startsWith('#/tasks');
       route = location.hash;
       menu = false;
       drop = '';
-      scrollTo(0, 0);
+      if (!stays) scrollTo(0, 0);
     };
     addEventListener('hashchange', moved);
     return () => removeEventListener('hashchange', moved);

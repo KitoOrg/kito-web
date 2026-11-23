@@ -160,13 +160,24 @@ kito-server serve --http 0.0.0.0:7443     # https://<the server>:7443/
   failed checks), the busiest files and functions, review. Charts drawn
   with Chart.js (MIT, in `licenses/`).
 - **Tasks** (Kito 0.33): what needs doing, as a board by where each
-  stands (to do, in a lane, ready to close, done); a task with its text,
-  its lanes, whom it is for and what was said on it, which the agents in
-  its lanes are told. Whoever may write asks for tasks, comments, says
-  whom they are for, and closes them: dropping a card on "Done" closes
-  it, dragging it back reopens it. A lane's page links to its task, and
-  "Needs you" has the tasks asked of you and those you asked for that are
-  ready to close.
+  stands (to do, in a lane, ready to close, done) or as a list, narrowed
+  by words and by whom a task is for, in the order chosen. A card says
+  whom its task is for, who took it up, its lanes and where each stands,
+  and when it last changed. A task opens beside them: its title and
+  text, which whoever may write changes there; whom it is for, picked
+  among the people and the agents; its lanes with their review; and what
+  happened to it in order, with what was said on it, which the agents in
+  its lanes are told (the order of what happened is kept from Kito 0.41
+  on). **Start work** opens a lane for the task, for the agent named,
+  and says what to tell that agent's assistant: Kito starts no agent.
+  Dropping a card on "Done" closes its task, dragging it back reopens
+  it. A lane's page links to its task, and "Needs you" has the tasks
+  asked of you and those you asked for that are ready to close.
+- On one's own machine (`kito web`), every page asks through this
+  program, which passes on what the pages have a use for and nothing
+  else: since 0.21 that is the tasks, the search, the numbers, the
+  instructions and a review sent whole too, which until then were
+  refused there.
 - **Instructions** (Kito 0.32): what the assistants are told, each file
   with where it comes from (the kitchen, the repository, or the
   repository over the kitchen), and what Claude Code, Codex or ZCode

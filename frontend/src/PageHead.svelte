@@ -12,9 +12,10 @@
   // `docs`: the part of the documentation that explains the page.
   // `lead`: the facts of the thing shown, never what the page is;
   // `after`: right after the title (where the thing stands); `actions`:
-  // buttons on the right. `name`: the short name for the browser's tab
-  // when the title is long.
-  let { title, name = title, mono = false, back = null, docs = null, lead = null, after = null, actions = null } = $props();
+  // buttons on the right. `views`: on the right before "Docs", what
+  // changes how the page shows what it shows. `name`: the short name for
+  // the browser's tab when the title is long.
+  let { title, name = title, mono = false, back = null, docs = null, lead = null, after = null, views = null, actions = null } = $props();
 
   $effect(() => {
     document.title = [name, shell.repo, 'Kito'].filter(Boolean).join(' · ');
@@ -28,8 +29,9 @@
     {#if after}<span class="after">{@render after()}</span>{/if}
     {#if lead}<p class="lead">{@render lead()}</p>{/if}
   </div>
-  {#if docs || actions}
+  {#if docs || actions || views}
     <div class="actions">
+      {@render views?.()}
       {#if docs}
         <a class="button quiet sm" href={docsLink(docs)} target="_blank" rel="noreferrer">Docs <Icon name="external" size={12} /></a>
       {/if}

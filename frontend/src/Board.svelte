@@ -2,7 +2,7 @@
   // The lanes of a repository, listed the way one reads them: where each
   // stands, whose it is, what it is on.
   import { ask, focus, laneLink, watch } from './api.js';
-  import { count, laneName, laneTitle, sentence, tasked, who } from './format.js';
+  import { count, laneName, laneTitle, scopeItems, sentence, tasked, who } from './format.js';
   import { LANE_PLACES, placeWords, sameCode, standing } from './standing.js';
   import Assistant from './Assistant.svelte';
   import Empty from './Empty.svelte';
@@ -10,6 +10,7 @@
   import Icon from './Icon.svelte';
   import Loading from './Loading.svelte';
   import PageHead from './PageHead.svelte';
+  import ScopeField from './ScopeField.svelte';
   import State from './State.svelte';
   import Time from './Time.svelte';
 
@@ -99,8 +100,7 @@
     busy = true;
     openFailed = '';
     try {
-      const items = scope.split(/[\s,]+/).filter((item) => item.length > 0);
-      opened = await ask('open_lane', { agent: agent.trim(), intent: intent.trim(), scope: items });
+      opened = await ask('open_lane', { agent: agent.trim(), intent: intent.trim(), scope: scopeItems(scope) });
       [agent, intent, scope, opening] = ['', '', '', false];
       await load();
     } catch (error) {
@@ -134,11 +134,7 @@
       <span>Why</span>
       <input bind:value={intent} placeholder="prices in cents" />
     </label>
-    <label class="field">
-      <span>Scope</span>
-      <input class="mono" bind:value={scope} placeholder="src/shop.ts:total" />
-      <span class="hint">Functions, files or directories, separated by spaces.</span>
-    </label>
+    <ScopeField bind:value={scope} />
     <div class="controls">
       <button class="primary" disabled={busy || agent.trim() === '' || intent.trim() === '' || scope.trim() === ''}>
         {busy ? 'Opening…' : 'Open'}
